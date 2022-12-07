@@ -8,5 +8,5 @@ Description: PooGwaM can be used to perform GWAS analysis from pool-sequencing d
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-Imports: stats,dplyr,PhenotypeSimulator,ggplot2,readr,stabs,glmnet
+Imports: stats,dplyr,PhenotypeSimulator,ggplot2,stabs,glmnet
 RoxygenNote: 7.2.2

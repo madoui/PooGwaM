@@ -4,7 +4,7 @@
 \alias{sim2snp}
 \title{Simulate phenotypes and genotypes}
 \usage{
-sim2snp(n, tNrSNP, cNrSNP)
+sim2snp(n, tNrSNP, cNrSNP, p = 2, gvar = 0.6, snph2 = 0.5, pleio = 0.2)
 }
 \arguments{
 \item{n}{Numeric vector.}
@@ -12,19 +12,29 @@ sim2snp(n, tNrSNP, cNrSNP)
 \item{tNrSNP}{Numeric vector}
 
 \item{cNrSNP}{Numeric vector}
+
+\item{p}{Numeric vector}
+
+\item{gvar}{Numeric vector}
+
+\item{snph2}{Numeric vector}
+
+\item{pleio}{numeric vector}
 }
 \value{
 a PhenotypeSimulator object
 }
 \description{
-PhenotypeSimulator wrapper to generates 2-dimensional phenotypes  (so, P=2)
+PhenotypeSimulator wrapper to generates p-dimensional phenotypes
 with 3 components: genetic effects, polygenic effects, and environmental noise.
 There is no covariaye effect (hence 'delta'=0) and no correlated noise (hence 'rho'=0).
 Total number of individuals \code{n}, default=2000,
+Number of phenotypes \code{p}, default = 2
 total number of SNPs \code{tNrSNP}, default=10000,
 Number of causal SNPs \code{cNrSNP}, default=10.
-Total genetic heritability \code{genVar}, default=60%,
-Note that SNP heritability is controlled by '\code{genVar} * \code{h2s}' and \code{h2s}=0.5/0.6 by default
+Total genetic heritability \code{gvar}, default=60%,
+SNP heritability * \code{h2s}, default=50%
+Ratio of Pleitropic SNPs \code{pleio}, default=0.2
 We randomly select 2 SNPs out of 10  to be causal for both the traits
 (i.e. pleitropic SNPs or SNPs having shared effect);
 and this quantity is controlled by '1-pIndependerGenetic'.

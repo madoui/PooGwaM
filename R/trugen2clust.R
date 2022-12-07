@@ -7,9 +7,10 @@
 #' @return genotypes assigned to cluster
 #'
 #' @examples
-#' sim = sim2snp(100,1000,10)
+#' sim = sim2snp(100,100,10)
 #' pools = phen2pool(sim, 3, 3)
 #' GenotypesCluster = trugen2clust (pools, sim)
+#'
 #' @importFrom dplyr %>%
 #' @importFrom dplyr filter
 #' @export
@@ -18,7 +19,6 @@ trugen2clust <-function(clusters, sim){
     k = length(clusters)
     l = list()
     for(i in 1:k){
-      #l[[i]] = genotype[ row.names(genotype) == clusters[[i]] ,]
       l[[i]]= genotype %>% filter(row.names(genotype) %in% clusters[[i]])
     }
     return(l)
