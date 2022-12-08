@@ -8,7 +8,7 @@
 #' @return dataframe of associated genotypes
 #'
 #' @examples
-#' sim = sim2snp(100,1000,10)
+#' sim = sim2snp(100,100,10)
 #' pools = phen2pool(sim,3,3)
 #' GenotypesCluster = trugen2clust(pools,sim)
 #' freq = pool2freq(pools,GenotypesCluster,sim)

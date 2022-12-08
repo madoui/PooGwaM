@@ -18,7 +18,8 @@ genotypes assigned to cluster
 This will assign the true genotypes to the cluster based on phenotypes
 }
 \examples{
-sim = sim2snp(100,1000,10)
+sim = sim2snp(100,100,10)
 pools = phen2pool(sim, 3, 3)
 GenotypesCluster = trugen2clust (pools, sim)
+
 }
