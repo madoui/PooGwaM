@@ -24,10 +24,10 @@ getCausalSNP<-function(simulation){
     return( substring(char, 38, nchar(char))       )
   }
   # SNPs which are causal only for Trait 1:-
-  snps_causal_trait1=unname(sapply(snps_causal_trait1, getindependent)) # these are SNPs only causal for Trait 1
+  snps_causal_trait1 = unname(sapply(snps_causal_trait1, getindependent)) # these are SNPs only causal for Trait 1
 
   # SNPs which are only causal for Trait 2:-
-  snps_causal_trait2=unname(sapply(snps_causal_trait2, getindependent)) # these are SNPs only causal for Trait 2
+  snps_causal_trait2 = unname(sapply(snps_causal_trait2, getindependent)) # these are SNPs only causal for Trait 2
 
   # The totality of 10 causal SNPs:-
   causal_snps=colnames(fixedGen[["cov"]])
@@ -43,7 +43,7 @@ getCausalSNP<-function(simulation){
   g = ggplot2::ggplot(data=Y, ggplot2::aes(x=trait_1, y=trait_2)) + ggplot2::geom_point()
   plot(g)
   causals= list("SNP_causal_trait_1_only" = snps_causal_trait1,
-                "SNP_causal_trait_2_only" = snps_causal_trait1,
+                "SNP_causal_trait_2_only" = snps_causal_trait2,
                 "Total" = causal_snps)
   return(causals)
 }
