@@ -1,14 +1,17 @@
-#' Cluster individuals based on their phenotypes into equal-sized pool for pool-seq
+#' quantile_clustering
 #'
-#' The goal is to cluster the individuals into pool based on their phenotypes,
+#' Cluster individuals based on their phenotypes into equal-sized pool for pool-seq
 #'
 #' @param data data frame of phenotypes
 #' @param n_quantiles numeric vector for the number of quantiles for each phenotype
 #' @return list
-#'
+#' @importFrom stats quantile
 #' @examples
+#' par(mfrow=c(1,2))
 #' clusters <- quantile_clustering(y<-data.frame(matrix(rnorm(500),500,1)))
 #' plot(data.frame(1:500,y),col=clusters,main="1D phenotypes",xlab="Index",ylab="Trait 1")
+#' clusters <- quantile_clustering(y<-data.frame(matrix(rnorm(1000),500,2)))
+#' plot(y,col=clusters,main="2D phenotypes",xlab="Trait 1",ylab="Trait 2")
 #'
 #' @export
 #'
@@ -38,8 +41,6 @@ quantile_clustering <- function(data, n_quantiles = 4) {
   clusters <- apply(data, 1, assign_cluster)
   return(clusters=as.integer(factor(clusters)))
 }
-
-
 
 
 
