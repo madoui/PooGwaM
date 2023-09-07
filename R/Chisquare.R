@@ -8,7 +8,7 @@
 #' @importFrom stats chisq.test
 #' @examples
 #' sim = PhenoSim (1000, 100, 10, 0.6, 5)
-#' clusters = quantile_clustering (sim$phenotypes, 7)
+#' clusters = quantile_clustering (data.frame(sim$phenotypes), 7)
 #' pv <- Chisquare (sim$genotypes, clusters)
 #'
 #'

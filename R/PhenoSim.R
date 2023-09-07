@@ -51,7 +51,7 @@ PhenoSim<-function(n = 2000, # number of individuals
 
   return(list(h2.estimation=h2,
               causal.true=causal.true,
-              phenotypes=data.frame(phenotypes),
+              phenotypes=phenotypes,
               genotypes=data.frame(genotypes)))
 }
 

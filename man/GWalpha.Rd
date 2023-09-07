@@ -32,7 +32,7 @@ apply GWAlpha method from Fournier-Level et 2017
 \examples{
 sim = PhenoSim (1000, 100, 10, 0.6, 5)
 K = 7
-clusters = quantile_clustering (sim$phenotypes, K)
+clusters = quantile_clustering (data.frame(sim$phenotypes), K)
 Freq= compute_group_MAFs(sim$genotypes,as.factor(clusters))
 test.stat<-GWalpha(sim$phenotypes, clusters, Freq, K)
 

@@ -10,12 +10,10 @@
 #'
 #' @return numeric vector
 #'
-#' @importFrom stats chisq.test
-#'
 #' @examples
 #' sim = PhenoSim (1000, 100, 10, 0.6, 5)
 #' K = 7
-#' clusters = quantile_clustering (sim$phenotypes, K)
+#' clusters = quantile_clustering (data.frame(sim$phenotypes), K)
 #' Freq= compute_group_MAFs(sim$genotypes,as.factor(clusters))
 #' test.stat<-GWalpha(sim$phenotypes, clusters, Freq, K)
 #'
@@ -29,6 +27,7 @@ GWalpha<-function(phenotypes = phenotypes,
                   clusters = clusters,
                   Freq = Freq,
                   K = K,
+                  #Pheno ? 1 2 ...
                   penalized = TRUE
                   ){
 
@@ -42,8 +41,6 @@ GWalpha<-function(phenotypes = phenotypes,
   miny<-min(phenotypes); maxy<-max(phenotypes)
   Alpha<-rep(1,dim(Freq)[2])
 
-  # this is always for first phenotype
-
   Y = phenotypes[,1]
 
   for (j in 1:dim(Freq)[2]){
@@ -51,7 +48,9 @@ GWalpha<-function(phenotypes = phenotypes,
     solution<-optim(c(1,1,1,1),LS,gr=NULL,Yprime,freqj,control=list(abstol=1e-8))$par
     muA_hat=miny+(maxy-miny)*solution[1]/(solution[1]+solution[2])
     muB_hat=miny+(maxy-miny)*solution[3]/(solution[3]+solution[4])
-    Alpha[j]=ifelse(penalized,2*sqrt(freqj*(1-freqj))*(muA_hat-muB_hat)/sd(phenotypes[,1]),(muA_hat-muB_hat)/sd(Y))
+    Alpha[j]=ifelse(penalized,2*sqrt(freqj*(1-freqj))*(muA_hat-muB_hat)/sd(phenotypes),(muA_hat-muB_hat)/sd(Y))
   }
   return(Alpha)
 }
+
+
