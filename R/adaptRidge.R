@@ -18,8 +18,8 @@
 #' @importFrom stats rnorm
 #'
 #' @examples
-#' sim = PhenoSim ( 1000, 100, 10, 0.6, 3 )
-#' K = 4
+#' sim = PhenoSim ( 100, 100, 10, 0.6, 2 )
+#' K = 3
 #' clusters = quantile_clustering ( data.frame ( sim$phenotypes ), K )
 #' Freq = compute_group_MAFs( sim$genotypes, as.factor(clusters) )
 #' res = adaptRidge( Freq, sim$phenotypes[,1], clusters )
@@ -30,9 +30,9 @@
 #' @export
 #'
 #'
-adaptRidge <- function( Freq = Freq,
-                        phenotypes = phenotypes,
-                        clusters = clusters,
+adaptRidge <- function( Freq,
+                        phenotypes,
+                        clusters,
                         eta = 1,
                         max_iter = 1000,
                         tol = 1e-8,

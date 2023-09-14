@@ -2,19 +2,19 @@
 #'
 #' apply classical chi-square
 #'
-#' @param genotypes data frame of genotypes
-#' @param clusters numeric vector of the clusters
+#' @param Freq data frame of genotypes
 #' @return list
 #' @importFrom stats chisq.test
 #' @examples
-#' sim = PhenoSim (1000, 100, 10, 0.6, 5)
-#' clusters = quantile_clustering (data.frame(sim$phenotypes), 7)
-#' pv <- Chisquare (sim$genotypes, clusters)
+#' sim = PhenoSim (500, 100, 10, 0.7, 2)
+#' clusters = quantile_clustering (data.frame(sim$phenotypes), 4)
+#' Freq = compute_group_MAFs( sim$genotypes, as.factor(clusters) )
+#' pv <- Chisquare (Freq)
 #'
 #'
 #' @export
 
-Chisquare <- function (genotypes, clusters){
-  pvalues<-apply(genotypes,2,function(x){chisq.test(table(clusters,as.factor(x)))$p.value})
+Chisquare <- function (Freq){
+  pvalues<-apply(Freq, 2, function(x){chisq.test(Freq, as.factor(rownames(Freq)))$p.value})
   return (pvalues)
 }
