@@ -57,11 +57,12 @@ benchPooGwaM<-function(pvalues,causal.true,threshold=0.4){
 
   # Confusion table for given theshold
   causal.estimated=factor(p.adjust(pvalues,"BH")< threshold, levels=c(FALSE,TRUE))
-  print(test.table<-table(causal.estimated,causal.true))
+  test.table<-table(causal.estimated,causal.true)
+  #print(test.table<-table(causal.estimated,causal.true))
 
-  print(paste("FDP",fdp(test.table)),digits=3)
+  #print(paste("FDP",fdp(test.table)),digits=3)
   # AUC
-  print(paste("AUC: ",round(performance(pred,"auc")@y.values[[1]],digits=3)))
+  #print(paste("AUC: ",round(performance(pred,"auc")@y.values[[1]],digits=3)))
 
   return (list("TN" = test.table[1,1],
           "FN" = test.table[1,2],
