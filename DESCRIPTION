@@ -1,12 +1,12 @@
 Package: PooGwaM
 Type: Package
 Title: pool-GWAS Analysis On Multiple Complex Traits
-Version: 0.1.0
+Version: 0.1.51
 Author: Bhargob Kakoty, Mohammed-Amin Madoui, Christophe Ambroise
 Maintainer: Mohammed-Amin Madoui <amine.madoui@gmail.com>
 Description: PooGwaM can be used to perform GWAS analysis from pool-sequencing data to identify genetic variants associated with multiple complex traits.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-Imports: stats,dplyr,PhenotypeSimulator, nnet, ROCR
+Imports: stats,dplyr,PhenotypeSimulator, nnet, ROCR, statgenGWAS
 RoxygenNote: 7.2.3

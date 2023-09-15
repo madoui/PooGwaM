@@ -16,7 +16,7 @@
 #' @export
 
 statgenGWASwrap <- function (genotypes, phenotypes){
-  map <- data.frame( pos = seq(1, SNP), chr = rep(1,SNP) )
+  map <- data.frame( pos = seq(1, ncol(genotypes)), chr = rep(1, ncol(genotypes) ) )
   rownames(map) <- colnames(genotypes)
   pheno4statgenGWAS = data.frame(genotype = rownames(genotypes), trait = as.numeric(phenotypes))
   gDataDrops <- createGData(geno = data.frame(genotypes),

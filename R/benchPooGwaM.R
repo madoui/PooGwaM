@@ -7,6 +7,8 @@
 #' @param causal.true numeric vector of the clusters
 #' @param threshold float default=0.4
 #'
+#' @return list benchmarking metrics
+#'
 #' @examples
 #' sim = PhenoSim (500, 100, 10, 0.6, 2)
 #' causal.true = sim$causal.true
@@ -60,4 +62,11 @@ benchPooGwaM<-function(pvalues,causal.true,threshold=0.4){
   print(paste("FDP",fdp(test.table)),digits=3)
   # AUC
   print(paste("AUC: ",round(performance(pred,"auc")@y.values[[1]],digits=3)))
+
+  return (list("TN" = test.table[1,1],
+          "FN" = test.table[1,2],
+          "FP" = test.table[2,1],
+          "TP" = test.table[2,2],
+          "AUC" = round( performance(pred,"auc")@y.values[[1]], digits = 3 ),
+          "FDP" = round( fdp(test.table), digits = 3 ) ) )
 }

@@ -13,6 +13,9 @@ benchPooGwaM(pvalues, causal.true, threshold = 0.4)
 
 \item{threshold}{float default=0.4}
 }
+\value{
+list benchmarking metrics
+}
 \description{
 benchmarking performance of PooGwaM on simulated data
 plots ROC curve, with AUC and FDP from threshold
