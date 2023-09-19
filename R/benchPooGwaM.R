@@ -49,10 +49,10 @@ benchPooGwaM<-function(pvalues,causal.true,threshold=0.4){
 
   # ROC curve
   perf <- performance(pred, "tpr", "fpr")
-  plot(perf,colorize=TRUE, lwd= 3,main= "ROC curve")
+  #plot(perf,colorize=TRUE, lwd= 3,main= "ROC curve")
   # Precision Recall curve
   perf <- performance(pred, "prec", "rec")
-  plot(perf, colorize=TRUE, lwd= 3,main= "Precision/Recall")
+  #plot(perf, colorize=TRUE, lwd= 3,main= "Precision/Recall")
 
 
   # Confusion table for given theshold

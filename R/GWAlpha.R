@@ -11,7 +11,7 @@
 #' @return numeric vector
 #'
 #' @examples
-#' sim = PhenoSim (100, 100, 10, 0.6, 5)
+#' sim = PhenoSim (1000, 100, 10, 0.6, 5)
 #' K = 7
 #' clusters = quantile_clustering (data.frame(sim$phenotypes), K)
 #' Freq= compute_group_MAFs(sim$genotypes,as.factor(clusters))
@@ -38,9 +38,11 @@ GWalpha<-function(phenotypes = phenotypes,
       sum((1-freqj - pbeta(Yprime[-1],parameters[3],parameters[4]) + pbeta(Yprime[-(K+1)],parameters[3],parameters[4]))^2)
   }
 
-  miny<-min(phenotypes); maxy<-max(phenotypes)
+  miny<-min(phenotypes);
+  maxy<-max(phenotypes)
   Alpha<-rep(1,dim(Freq)[2])
 
+  #Y = phenotypes[,1]
 
   for (j in 1:dim(Freq)[2]){
     freqj<-Freq[,j]
