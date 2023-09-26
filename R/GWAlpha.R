@@ -21,7 +21,7 @@
 #'
 #' @export
 
-
+# Problem with the order of the frequencies
 GWalpha<-function(phenotypes = phenotypes,
                   #Yprime = Yprime,
                   clusters = clusters,
