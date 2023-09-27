@@ -4,10 +4,12 @@
 \alias{Chisquare}
 \title{Chisquare}
 \usage{
-Chisquare(Freq)
+Chisquare(Freq, clusters)
 }
 \arguments{
 \item{Freq}{data frame of genotypes}
+
+\item{clusters}{integers}
 }
 \value{
 list
@@ -19,7 +21,7 @@ apply classical chi-square
 sim = PhenoSim (500, 100, 10, 0.7, 2)
 clusters = quantile_clustering (data.frame(sim$phenotypes), 4)
 Freq = compute_group_MAFs( sim$genotypes, as.factor(clusters) )
-pv <- Chisquare (Freq)
+pv <- Chisquare (Freq, clusters)
 
 
 }
