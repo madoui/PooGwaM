@@ -4,7 +4,7 @@
 #'
 #' @param data data frame of phenotypes
 #' @param n_quantiles numeric vector for the number of quantiles for each phenotype
-#' @return list
+#' @return factor
 #' @importFrom stats quantile
 #' @examples
 #' par(mfrow=c(1,2))
@@ -16,6 +16,8 @@
 #' @export
 #'
 quantile_clustering <- function(data, n_quantiles = 4) {
+  cluster_labels<-unlist(data.frame(sapply(letters[1:2],function(x) paste(x,letters,sep=""))))
+
   if (!is.data.frame(data)) {
     stop("Input data must be a data frame.")
   }
@@ -24,22 +26,24 @@ quantile_clustering <- function(data, n_quantiles = 4) {
   }
   # Compute quantile boundaries for each column
   quantile_boundaries <- lapply(data, function(column) {
-    quantile(column, probs = seq(0, 1, length.out = n_quantiles + 1), na.rm = TRUE)
+    quantile(column,
+             probs = seq(0, 1, length.out = n_quantiles+1),
+             na.rm = TRUE)
   })
   # Function to assign a vector to a cluster based on its quantiles
   assign_cluster <- function(vector) {
     cluster <- sapply(seq_along(vector), function(i) {
       # Find the quantile index of the current variable
-      quantile_index <- sum(vector[i] >= quantile_boundaries[[i]]) - 1
+      quantile_index <- sum(vector[i] >= quantile_boundaries[[i]][-length(quantile_boundaries[[i]])])
       # Convert the quantile index to a character and concatenate it
-      paste0("Q", quantile_index)
+      paste0("Q.", cluster_labels[quantile_index])
     })
     paste(cluster, collapse = "-")
   }
 
   # Assign each row to a cluster
   clusters <- apply(data, 1, assign_cluster)
-  return(clusters=as.integer(factor(clusters)))
+  return(clusters=factor(clusters))
 }
 
 

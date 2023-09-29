@@ -1,0 +1,36 @@
+---
+title: "Pool GWAS simulation"
+author: "Amine Madoui et Christophe Ambroise"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Pool GWAS simulation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+
+# Simulating and preparing Data
+
+## Phenotypes and genotypes simulation
+library(PooGwaM)
+
+
+# Testing
+sim = PhenoSim ( n = 500,
+                 SNP = 1000,
+                 h2 = 0.7,
+                 n_causal = 20,
+                 p = 1)
+
+
+clusters = quantile_clustering (data.frame(sim$phenotypes),20)
+boxplot(sim$phenotypes~clusters)

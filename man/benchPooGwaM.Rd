@@ -26,7 +26,7 @@ causal.true = sim$causal.true
 K = 4
 clusters = quantile_clustering (data.frame(sim$phenotypes), K)
 Freq= compute_group_MAFs(sim$genotypes,as.factor(clusters))
-test.stat<-GWalpha(sim$phenotypes[,1], clusters, Freq, K)
+test.stat<-GWalpha(sim$phenotypes, d=1, clusters, Freq)
 benchPooGwaM (test.stat, causal.true)
 
 

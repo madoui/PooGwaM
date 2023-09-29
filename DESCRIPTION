@@ -9,4 +9,10 @@ License: GPL-3
 Encoding: UTF-8
 LazyData: true
 Imports: stats,dplyr,PhenotypeSimulator, nnet, ROCR, statgenGWAS
+VignetteBuilder: knitr
+Suggests: 
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
 RoxygenNote: 7.2.3
+Config/testthat/edition: 3

@@ -12,7 +12,7 @@ quantile_clustering(data, n_quantiles = 4)
 \item{n_quantiles}{numeric vector for the number of quantiles for each phenotype}
 }
 \value{
-list
+factor
 }
 \description{
 Cluster individuals based on their phenotypes into equal-sized pool for pool-seq
