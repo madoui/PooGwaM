@@ -6,20 +6,20 @@
 \usage{
 GWalpha(
   phenotypes = phenotypes,
+  d = 1,
   clusters = clusters,
   Freq = Freq,
-  K = K,
   penalized = TRUE
 )
 }
 \arguments{
 \item{phenotypes}{data frame of phenotypes}
 
+\item{d}{phenotypes index to be analyzed}
+
 \item{clusters}{numeric vector of the clusters}
 
 \item{Freq}{numeric vector of allele frequencies}
-
-\item{K}{numeric vector of number of clusters}
 
 \item{penalized}{boolean}
 }
@@ -31,9 +31,8 @@ apply GWAlpha method from Fournier-Level et 2017
 }
 \examples{
 sim = PhenoSim (1000, 100, 10, 0.6, 5)
-K = 7
-clusters = quantile_clustering (data.frame(sim$phenotypes), K)
+clusters = quantile_clustering (data.frame(sim$phenotypes))
 Freq= compute_group_MAFs(sim$genotypes,as.factor(clusters))
-test.stat<-GWalpha(sim$phenotypes[,1], clusters, Freq, K)
+test.stat<-GWalpha(sim$phenotypes,d=1, clusters, Freq)
 
 }
