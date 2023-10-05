@@ -26,5 +26,5 @@ Chisquare <- function (Freq, clusters){
     return(chisq.test(allele_counts)$p.value)
   }
   pvalues = apply( Freq, 2, FUN = function(x) freq2alleleCount (x, cluster_size))
-  return (pvalues)
+  return (p.adjust(pvalues, "BH"))
 }
