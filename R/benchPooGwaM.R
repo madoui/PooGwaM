@@ -24,7 +24,7 @@
 #' @importFrom stats p.adjust
 #' @export
 
-benchPooGwaM<-function(pvalues,causal.true,threshold=0.4){
+benchPooGwaM<-function(pvalues,causal.true,threshold=0.1){
 
   fdp <- function(cont_table) {
 
