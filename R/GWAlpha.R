@@ -1,6 +1,6 @@
 #' GWAlpha
 #'
-#' apply GWAlpha method from Fournier-Level et 2017
+#' apply the GWAlpha algorithm from Fournier-Level et al. 2017
 #'
 #' @param phenotypes data frame of phenotypes
 #' @param d phenotypes index to be analyzed
@@ -55,8 +55,6 @@ GWalpha<-function(phenotypes = phenotypes,
   miny<-min(phenotypes);
   maxy<-max(phenotypes)
   Alpha<-rep(1,dim(Freq)[2])
-
-  #Y = phenotypes[,1]
 
   for (j in 1:dim(Freq)[2]){
     freqj<-Freq[,j]

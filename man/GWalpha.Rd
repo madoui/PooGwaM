@@ -27,7 +27,7 @@ GWalpha(
 numeric vector
 }
 \description{
-apply GWAlpha method from Fournier-Level et 2017
+apply the GWAlpha algorithm from Fournier-Level et al. 2017
 }
 \examples{
 sim = PhenoSim (1000, 100, 10, 0.6, 5)
