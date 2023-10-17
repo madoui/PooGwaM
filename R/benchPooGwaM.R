@@ -73,5 +73,5 @@ benchPooGwaM<-function( pvalues, causal.true, threshold=0.1 ){
                 "FDP" = FDP,
                 "Recall" = Recall,
                 "Precision" = Precision,
-                "F1-score" = F1) )
+                "F1_score" = F1) )
 }
