@@ -5,7 +5,7 @@
 #'
 #' @param pvalues data frame of phenotypes
 #' @param causal.true numeric vector of the clusters
-#' @param threshold float default=0.4
+#' @param threshold float default=0.1
 #'
 #' @return list benchmarking metrics
 #'
@@ -20,54 +20,58 @@
 #'
 #'
 #' @importFrom ROCR performance prediction
-#' @importFrom  graphics par
 #' @importFrom stats p.adjust
 #' @export
 
-benchPooGwaM<-function(pvalues,causal.true,threshold=0.1){
-
-  fdp <- function(cont_table) {
-
-    # Extract values from contingency table
-    TN <- cont_table[1,1]
-    FN <- cont_table[1,2]
-    FP <- cont_table[2,1]
-    TP <- cont_table[2,2]
-
-    # Calculate FDP
-    if ((FP + TP) == 0) {
-      fdp <- 0
-    } else {
-      fdp <- FP / (FP + TP)
-    }
-
-    return(fdp)
-  }
-
-  pred <- prediction( 1-pvalues, causal.true)
-  par(mfrow=c(1,2))
-
-  # ROC curve
-  perf <- performance(pred, "tpr", "fpr")
-  #plot(perf,colorize=TRUE, lwd= 3,main= "ROC curve")
-  # Precision Recall curve
-  perf <- performance(pred, "prec", "rec")
-  #plot(perf, colorize=TRUE, lwd= 3,main= "Precision/Recall")
-
-
-  # Confusion table for given theshold
+benchPooGwaM<-function( pvalues, causal.true, threshold=0.1 ){
   causal.estimated=factor(p.adjust(pvalues,"BH")< threshold, levels=c(FALSE,TRUE))
   test.table<-table(causal.estimated,causal.true)
-  #print(test.table<-table(causal.estimated,causal.true))
+  TN <- test.table[1,1]
+  FN <- test.table[1,2]
+  FP <- test.table[2,1]
+  TP <- test.table[2,2]
 
-  #print(paste("FDP",fdp(test.table)),digits=3)
-  # AUC
-  #print(paste("AUC: ",round(performance(pred,"auc")@y.values[[1]],digits=3)))
+  # Calculate FDP
+  if ((FP + TP) == 0) {
+    FDP <- 0
+  } else {
+    FDP <- FP / (FP + TP)
+  }
+  FDP = round(FDP, digits = 3)
+  pred <- prediction( 1-pvalues, causal.true)
+  AUC = round( performance(pred,"auc")@y.values[[1]], digits = 3 )
 
-  return (list("TN" = test.table[1,1],
-          "FN" = test.table[1,2],
-          "FP" = test.table[2,1],
-          "TP" = test.table[2,2],
-          "AUC" = round( performance(pred,"auc")@y.values[[1]], digits = 3 ),
-          "FDP" = round( fdp(test.table), digits = 3 ) ) )
+  # calculate Precision
+  if(TP+FP == 0){
+    Precision = 0
+  }
+  else{
+    Precision = round(TP/(TP+FP), digits = 3)
+  }
+
+  # calculate Recall
+  if(TP+FN == 0){
+    Recall = 0
+   }
+  else{
+    Recall = round(TP/(TP+FN), digits = 3)
+  }
+
+  # Calculate F1-score
+  if(Precision+Recall == 0){
+    F1 = 0
+  }
+  else{
+    F1 = round((2*Precision*Recall)/(Precision+Recall), digits = 3)
+  }
+
+  return (list( "TN" = TN,
+                "FN" = FN,
+                "FP" = FP,
+                "TP" = TP,
+                "AUC" = AUC,
+                "FDP" = FDP,
+                "Recall" = Recall,
+                "Precision" = Precision,
+                "F1-score" = F1) )
 }
