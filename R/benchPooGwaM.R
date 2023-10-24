@@ -1,7 +1,7 @@
 #' benchPooGwaM
 #'
 #' benchmarking performance of PooGwaM on simulated data
-#' plots ROC curve, with AUC and FDP from threshold
+#'
 #'
 #' @param pvalues data frame of phenotypes
 #' @param causal.true numeric vector of the clusters

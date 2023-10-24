@@ -18,7 +18,6 @@ list benchmarking metrics
 }
 \description{
 benchmarking performance of PooGwaM on simulated data
-plots ROC curve, with AUC and FDP from threshold
 }
 \examples{
 sim = PhenoSim (500, 100, 10, 0.6, 2)
