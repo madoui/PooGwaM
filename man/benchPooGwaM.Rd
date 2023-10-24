@@ -4,14 +4,14 @@
 \alias{benchPooGwaM}
 \title{benchPooGwaM}
 \usage{
-benchPooGwaM(pvalues, causal.true, threshold = 0.4)
+benchPooGwaM(pvalues, causal.true, threshold = 0.1)
 }
 \arguments{
 \item{pvalues}{data frame of phenotypes}
 
 \item{causal.true}{numeric vector of the clusters}
 
-\item{threshold}{float default=0.4}
+\item{threshold}{float default=0.1}
 }
 \value{
 list benchmarking metrics
