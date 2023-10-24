@@ -56,7 +56,7 @@ benchPooGwaM<-function(pvalues,causal.true,threshold=0.1){
 
 
   # Confusion table for given theshold
-  causal.estimated=factor(p.adjust(pvalues,"BH")< threshold, levels=c(FALSE,TRUE))
+  causal.estimated=factor(p.adjust(pvalues,"BH")<= threshold, levels=c(FALSE,TRUE))
   test.table<-table(causal.estimated,causal.true)
   #print(test.table<-table(causal.estimated,causal.true))
 
