@@ -27,7 +27,7 @@ PhenoSim<-function(n = 2000, # number of individuals
                    SNP = 100, # number of SNPs
                    n_causal = 10, # number of causal SNPs
                    h2 = 0.5, # heritability
-                   p = 5, #number of traits
+                   p = 5 #number of traits
                    ){
 
   # run PhenotypeSimulator
