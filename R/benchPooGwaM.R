@@ -2,7 +2,6 @@
 #'
 #' benchmarking performance of PooGwaM on simulated data
 #'
-#'
 #' @param pvalues data frame of phenotypes
 #' @param causal.true numeric vector of the clusters
 #' @param threshold float default=0.1
@@ -17,7 +16,6 @@
 #' Freq= compute_group_MAFs(sim$genotypes,as.factor(clusters))
 #' test.stat<-GWalpha(sim$phenotypes, d=1, clusters, Freq)
 #' benchPooGwaM (test.stat, causal.true)
-#'
 #'
 #' @importFrom ROCR performance prediction
 #' @importFrom stats p.adjust

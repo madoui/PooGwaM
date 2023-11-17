@@ -4,7 +4,7 @@
 \alias{PhenoSim}
 \title{Simulate phenotypes and genotypes using PhenotypeSimulator}
 \usage{
-PhenoSim(n = 2000, SNP = 100, n_causal = 10, h2 = 0.5, p = 5)
+PhenoSim(n = 2000, SNP = 100, n_causal = 10, h2 = 0.5, p = 5, seed = 123)
 }
 \arguments{
 \item{n}{Numeric vector}
@@ -16,6 +16,8 @@ PhenoSim(n = 2000, SNP = 100, n_causal = 10, h2 = 0.5, p = 5)
 \item{h2}{Numeric vector}
 
 \item{p}{Numeric vector}
+
+\item{seed}{Numeric vector}
 }
 \value{
 a list
@@ -27,6 +29,7 @@ Total number of SNPs \code{SNP}, default=100
 Number of phenotypes \code{p}, default=5
 SNP heritability \code{h2s}, default=50%
 Number of causal SNPs \code{n_causal}, default=10
+Seed for random generaion \code{seed}, default=123
 }
 \examples{
 sim = PhenoSim (1000, 100, 10, 0.6, 5)

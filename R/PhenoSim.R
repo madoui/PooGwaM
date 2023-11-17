@@ -6,6 +6,7 @@
 #' Number of phenotypes \code{p}, default=5
 #' SNP heritability \code{h2s}, default=50%
 #' Number of causal SNPs \code{n_causal}, default=10
+#' Seed for random generaion \code{seed}, default=123
 
 #'
 #' @param n Numeric vector
@@ -13,7 +14,7 @@
 #' @param h2 Numeric vector
 #' @param n_causal Numeric vector
 #' @param p Numeric vector
-
+#' @param seed Numeric vector
 
 #' @return a list
 #'
@@ -27,8 +28,8 @@ PhenoSim<-function(n = 2000, # number of individuals
                    SNP = 100, # number of SNPs
                    n_causal = 10, # number of causal SNPs
                    h2 = 0.5, # heritability
-                   p = 5 #number of traits
-                   ){
+                   p = 5, #number of traits
+                   seed = 123){
 
   # run PhenotypeSimulator
   simulation = PhenotypeSimulator::runSimulation(N = n, # individuals
@@ -40,7 +41,8 @@ PhenoSim<-function(n = 2000, # number of individuals
                              rho=0,
                              delta=0,
                              SNPfrequencies=c(0.5),
-                             pIndependentGenetic = 1)
+                             pIndependentGenetic = 1,
+                             seed = seed)
 
   # store simulation
   phenotypes = simulation[["phenoComponentsFinal"]][["Y"]]
