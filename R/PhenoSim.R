@@ -6,12 +6,14 @@
 #' Number of phenotypes \code{p}, default=5
 #' SNP heritability \code{h2s}, default=50%
 #' Number of causal SNPs \code{n_causal}, default=10
+
 #'
 #' @param n Numeric vector
 #' @param SNP Numeric vector.
 #' @param h2 Numeric vector
 #' @param n_causal Numeric vector
 #' @param p Numeric vector
+
 
 #' @return a list
 #'
@@ -25,7 +27,7 @@ PhenoSim<-function(n = 2000, # number of individuals
                    SNP = 100, # number of SNPs
                    n_causal = 10, # number of causal SNPs
                    h2 = 0.5, # heritability
-                   p = 5 #number of traits
+                   p = 5, #number of traits
                    ){
 
   # run PhenotypeSimulator
@@ -38,7 +40,7 @@ PhenoSim<-function(n = 2000, # number of individuals
                              rho=0,
                              delta=0,
                              SNPfrequencies=c(0.5),
-                             pIndependentGenetic = 1, seed=16 )
+                             pIndependentGenetic = 1)
 
   # store simulation
   phenotypes = simulation[["phenoComponentsFinal"]][["Y"]]
