@@ -6,6 +6,7 @@
 #' Number of phenotypes \code{p}, default=5
 #' SNP heritability \code{h2s}, default=50%
 #' Number of causal SNPs \code{n_causal}, default=10
+#' Correlation between phenotype \code{pcorr}, default=0.8
 #' Seed for random generaion \code{seed}, default=123
 
 #'
@@ -14,6 +15,7 @@
 #' @param h2 Numeric vector
 #' @param n_causal Numeric vector
 #' @param p Numeric vector
+#' @param pcorr Numeric vector
 #' @param seed Numeric vector
 
 #' @return a list
@@ -29,6 +31,7 @@ PhenoSim<-function(n = 2000, # number of individuals
                    n_causal = 10, # number of causal SNPs
                    h2 = 0.5, # heritability
                    p = 5, #number of traits
+                   pcorr = 0.8, # correlation between phenotypes
                    seed = 123){
 
   # run PhenotypeSimulator
@@ -42,6 +45,7 @@ PhenoSim<-function(n = 2000, # number of individuals
                              delta=0,
                              SNPfrequencies=c(0.5),
                              pIndependentGenetic = 1,
+                             pcorr = pcorr,
                              seed = seed)
 
   # store simulation

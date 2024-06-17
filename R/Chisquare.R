@@ -23,7 +23,7 @@ Chisquare <- function (Freq, clusters){
     allele_counts[1,] = c(round(2*clusters_size*SNPfreq^2))
     allele_counts[2,] = c(round(2*clusters_size*SNPfreq*(1-SNPfreq)))
     allele_counts[3,] = c(round(2*clusters_size*(1-SNPfreq)^2))
-    return(fisher.test(allele_counts)$p.value)
+    return(chisq.test(allele_counts)$p.value)
   }
   pvalues = apply( Freq, 2, FUN = function(x) freq2alleleCount (x, cluster_size))
   return (p.adjust(pvalues, "BH"))

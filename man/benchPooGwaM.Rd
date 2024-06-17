@@ -28,5 +28,4 @@ Freq= compute_group_MAFs(sim$genotypes,as.factor(clusters))
 test.stat<-GWalpha(sim$phenotypes, d=1, clusters, Freq)
 benchPooGwaM (test.stat, causal.true)
 
-
 }
