@@ -1,18 +1,19 @@
 Package: PooGwaM
 Type: Package
-Title: pool-GWAS Analysis On Multiple Complex Traits
-Version: 0.1.51
-Author: Bhargob Kakoty, Mohammed-Amin Madoui, Christophe Ambroise
-Maintainer: Mohammed-Amin Madoui <amine.madoui@gmail.com>
-Description: PooGwaM can be used to perform GWAS analysis from pool-sequencing data to identify genetic variants associated with multiple complex traits.
+Title: Validated Multi-Response Regression for Phenotype-Defined Pools
+Version: 2.0.0
+Authors@R: c(person("Bhargob", "Kakoty", role = "aut"),
+    person("Mohammed-Amin", "Madoui", email = "amine.madoui@gmail.com", role = c("aut", "cre")),
+    person("Christophe", "Ambroise", role = "aut"))
+Description: Fits deterministic regularized regression to allele frequencies
+    and multiple phenotypes measured in pools. Provides explicit identifiers,
+    quality control, phenotype pooling, joint sparse estimation and bounded
+    null-model calibration with documented assumptions. Exploratory scores
+    are separated from calibrated probabilities. External association
+    programs are managed by a separate benchmark rather than reimplemented.
 License: GPL-3
 Encoding: UTF-8
-LazyData: true
-Imports: stats,dplyr,PhenotypeSimulator, nnet, ROCR, statgenGWAS, RSpectra
-VignetteBuilder: knitr
-Suggests: 
-    knitr,
-    rmarkdown,
-    testthat (>= 3.0.0)
-RoxygenNote: 7.3.1
+Depends: R (>= 4.1.0)
+Imports: stats
+Suggests: testthat (>= 3.0.0)
 Config/testthat/edition: 3
