@@ -10,18 +10,51 @@
   as.integer(x)
 }
 
-.calibration_rng <- function(seed) {
+.calibration_rng <- function(seed, rng_kind = NULL) {
   seed <- .calibration_integer(seed, "seed", 0)
+  if (!is.null(rng_kind) && (!is.character(rng_kind) ||
+      length(rng_kind) != 3L || anyNA(rng_kind) || any(!nzchar(rng_kind))))
+    stop("rng_kind must be NULL or the three strings returned by RNGkind().", call. = FALSE)
+  kind <- RNGkind()
+  if (kind[2L] == "Box-Muller" || (!is.null(rng_kind) && rng_kind[2L] == "Box-Muller"))
+    stop("Box-Muller has a normal cache that R cannot restore from .Random.seed; ",
+         "select normal.kind = 'Inversion' before calibration.", call. = FALSE)
+  if (any(kind == "user-supplied") || any(rng_kind == "user-supplied"))
+    stop("user-supplied RNG state cannot be captured and restored by calibration.", call. = FALSE)
   present <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
   previous <- if (present) get(".Random.seed", envir = .GlobalEnv) else NULL
-  kind <- RNGkind()
-  set.seed(seed)
-  function() {
+  restore <- function() {
     do.call(RNGkind, as.list(kind))
     if (present) assign(".Random.seed", previous, envir = .GlobalEnv)
     else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE))
       rm(".Random.seed", envir = .GlobalEnv)
   }
+  tryCatch({
+    if (!is.null(rng_kind)) do.call(RNGkind, as.list(unname(rng_kind)))
+    set.seed(seed)
+  }, error = function(e) {
+    restore()
+    stop(e)
+  })
+  attr(restore, "provenance") <- list(
+    seed = seed, kind = setNames(RNGkind(), c("kind", "normal.kind", "sample.kind")),
+    initial_state = get(".Random.seed", envir = .GlobalEnv),
+    r_version = R.version.string,
+    package_version = if (isNamespace(environment(.calibration_rng)))
+      as.character(getNamespaceVersion(environment(.calibration_rng))) else NA_character_,
+    source_mode = if (isNamespace(environment(.calibration_rng))) "namespace" else "sourced")
+  restore
+}
+
+.calibration_rng_state <- function() get(".Random.seed", envir = .GlobalEnv)
+
+# Hash a streamed serialization rather than allocating another genome-sized
+# raw vector. This is a provenance checksum, not a credential or signature.
+.calibration_fingerprint <- function(object) {
+  path <- tempfile("poogwam-provenance-", fileext = ".rds")
+  on.exit(unlink(path), add = TRUE)
+  saveRDS(object, path, compress = FALSE, version = 2)
+  unname(tools::md5sum(path))
 }
 
 .calibration_fit_args <- function(fit_args) {
@@ -73,18 +106,100 @@
   list(trait = abs(fit$beta), omnibus = omnibus)
 }
 
+.calibration_pilot <- function(fit, simulate_fit, B_pilot, scale_floor) {
+  mean <- m2 <- setNames(numeric(nrow(fit$beta)), rownames(fit$beta))
+  amplitude <- mean
+  for (b in seq_len(B_pilot)) {
+    null_fit <- simulate_fit(b)
+    if (!identical(dimnames(null_fit$beta), dimnames(fit$beta)))
+      stop("The pilot changed variant or trait identifiers.", call. = FALSE)
+    scores <- .calibration_scores(null_fit)$omnibus
+    # Welford moments on a dynamically scaled score avoid squaring very
+    # large or tiny finite numbers. Scaling is separate for each variant.
+    new_amplitude <- pmax(amplitude, scores)
+    divisor <- new_amplitude
+    divisor[divisor == 0] <- 1
+    ratio <- amplitude / divisor
+    mean <- mean * ratio
+    m2 <- m2 * ratio^2
+    amplitude <- new_amplitude
+    normalized <- scores / divisor
+    delta <- normalized - mean
+    mean <- mean + delta / b
+    m2 <- m2 + delta * (normalized - mean)
+  }
+  mean <- mean * amplitude
+  sd <- sqrt(pmax(m2, 0) / (B_pilot - 1)) * amplitude
+  if (any(!is.finite(mean)) || any(!is.finite(sd)))
+    stop("Pilot moments overflow; rescale or regularize the fit.", call. = FALSE)
+  reference <- max(c(mean, sd))
+  status <- "pilot_scaled"
+  if (reference == 0) {
+    # A zero pilot can miss rare events. This fixed fallback is a valid
+    # increasing transformation, not a claim that the score is constant.
+    scale <- setNames(rep(1, length(mean)), names(mean))
+    floor <- NA_real_
+    status <- "all_zero_pilot_unit_scale"
+    warning("All pilot omnibus scores are zero; using a fixed unit scale. ",
+            "This does not establish zero null variance; inspect the pilot or increase B_pilot.",
+            call. = FALSE)
+  } else {
+    floor <- max(scale_floor * reference, .Machine$double.xmin)
+    scale <- pmax(sd, floor)
+  }
+  list(B = B_pilot, mean_omnibus = mean, sd_omnibus = sd, scale = scale,
+       scale_floor = scale_floor, reference_scale = reference,
+       effective_floor = floor, floored_variants = names(sd)[sd < scale],
+       zero_sd_variants = names(sd)[sd == 0], status = status)
+}
+
+.calibration_studentize <- function(score, studentization) {
+  result <- (score - studentization$mean_omnibus) / studentization$scale
+  if (any(!is.finite(result)))
+    stop("Studentized omnibus scores overflow; inspect pilot scales and regularization.",
+         call. = FALSE)
+  result
+}
+
 # A streaming implementation avoids retaining B full genome-wide fits.
-.calibration_run <- function(fit, simulate_fit, B, method, metadata) {
+.calibration_run <- function(fit, simulate_fit, B, method, metadata,
+                             studentization = NULL) {
   observed <- .calibration_scores(fit)
   exceed <- matrix(0, nrow(fit$beta), ncol(fit$beta), dimnames = dimnames(fit$beta))
   exceed_omnibus <- exceed_max <- setNames(numeric(nrow(fit$beta)), rownames(fit$beta))
   mean_trait <- m2_trait <- exceed
   mean_omnibus <- m2_omnibus <- exceed_omnibus
   maxima <- numeric(B)
+  maximum_variants <- character(B)
+  maximum_ties <- integer(B)
   # Relative tolerance preserves p-values when a trait's measurement unit
   # changes, even to very small units. A zero observed score always has p = 1.
   tolerance_trait <- 64 * .Machine$double.eps * observed$trait
   tolerance_omnibus <- 64 * .Machine$double.eps * observed$omnibus
+  if (!is.null(studentization)) {
+    observed_t <- .calibration_studentize(observed$omnibus, studentization)
+    # Account for cancellation when centering; unlike raw norms, t can be
+    # negative. The scale is fixed using the independent pilot only.
+    epsilon <- 64 * .Machine$double.eps
+    scaled_roundoff <- function(value) {
+      ratio <- value / studentization$scale
+      out <- epsilon * ratio
+      overflow <- !is.finite(ratio)
+      # A centered score may be finite even when either uncentered ratio
+      # overflows. Multiply first only in that case, avoiding both overflow
+      # for large values and premature underflow for very small values.
+      out[overflow] <- (epsilon * value[overflow]) / studentization$scale[overflow]
+      out
+    }
+    tolerance_t <- pmax(epsilon * abs(observed_t),
+      scaled_roundoff(observed$omnibus), scaled_roundoff(studentization$mean_omnibus))
+    if (any(!is.finite(tolerance_t)))
+      stop("Studentized comparison tolerance overflows; increase scale_floor or regularization.",
+           call. = FALSE)
+    maxima_t <- numeric(B)
+    maximum_t_variants <- character(B)
+    maximum_t_ties <- integer(B)
+  }
   for (b in seq_len(B)) {
     null_fit <- simulate_fit(b)
     null <- .calibration_scores(null_fit)
@@ -95,7 +210,17 @@
     exceed_omnibus <- exceed_omnibus +
       (null$omnibus >= observed$omnibus - tolerance_omnibus)
     maxima[b] <- max(null$omnibus)
-    exceed_max <- exceed_max + (maxima[b] >= observed$omnibus - tolerance_omnibus)
+    maximum_variants[b] <- names(null$omnibus)[which.max(null$omnibus)]
+    maximum_ties[b] <- sum(null$omnibus == maxima[b])
+    if (is.null(studentization)) {
+      exceed_max <- exceed_max + (maxima[b] >= observed$omnibus - tolerance_omnibus)
+    } else {
+      null_t <- .calibration_studentize(null$omnibus, studentization)
+      maxima_t[b] <- max(null_t)
+      maximum_t_variants[b] <- names(null_t)[which.max(null_t)]
+      maximum_t_ties[b] <- sum(null_t == maxima_t[b])
+      exceed_max <- exceed_max + (maxima_t[b] >= observed_t - tolerance_t)
+    }
     delta <- null$trait - mean_trait
     mean_trait <- mean_trait + delta / b
     m2_trait <- m2_trait + delta * (null$trait - mean_trait)
@@ -103,8 +228,18 @@
     mean_omnibus <- mean_omnibus + delta / b
     m2_omnibus <- m2_omnibus + delta * (null$omnibus - mean_omnibus)
   }
+  if (!is.null(studentization)) {
+    studentization$observed_omnibus <- observed_t
+    studentization$max_omnibus <- maxima_t
+    studentization$comparison_tolerance <- tolerance_t
+  }
   structure(c(list(
     method = method, fit = fit, B = B, resolution = 1 / (B + 1),
+    maxT_method = if (is.null(studentization)) "raw" else "studentized",
+    studentization = studentization,
+    maxT_diagnostics = list(raw_max_variant = maximum_variants, raw_max_ties = maximum_ties,
+      studentized_max_variant = if (is.null(studentization)) NULL else maximum_t_variants,
+      studentized_max_ties = if (is.null(studentization)) NULL else maximum_t_ties),
     p_raw = (1 + exceed) / (B + 1),
     p_omnibus = (1 + exceed_omnibus) / (B + 1),
     p_maxT_omnibus = (1 + exceed_max) / (B + 1),
@@ -124,8 +259,18 @@
 #' See the installed help page for exchangeability and global-null restrictions.
 calibrate_pool_permutation <- function(genotypes, phenotypes, pool_builder,
                                        B = 999, seed = 1, strata = NULL,
-                                       fit_args = list()) {
+                                       fit_args = list(),
+                                       maxT = c("raw", "studentized"),
+                                       B_pilot = 199, scale_floor = 1e-8,
+                                       rng_kind = NULL) {
   B <- .calibration_integer(B, "B")
+  maxT <- match.arg(maxT)
+  if (maxT == "studentized") {
+    B_pilot <- .calibration_integer(B_pilot, "B_pilot", 2)
+    .fit_scalar(scale_floor, "scale_floor", strict = TRUE)
+    if (scale_floor > 1)
+      stop("scale_floor must be in (0, 1].", call. = FALSE)
+  }
   fit_args <- .calibration_fit_args(fit_args)
   genotypes <- .calibration_matrix(genotypes, "genotypes")
   phenotypes <- .calibration_matrix(phenotypes, "phenotypes")
@@ -152,11 +297,13 @@ calibrate_pool_permutation <- function(genotypes, phenotypes, pool_builder,
     warning("Blocked permutation assumes genotype rows are exchangeable within strata; ",
             "blocks alone do not establish this assumption.", call. = FALSE)
   }
-  restore <- .calibration_rng(seed)
+  restore <- .calibration_rng(seed, rng_kind)
   on.exit(restore(), add = TRUE)
+  rng <- attr(restore, "provenance")
   # Y stays fixed, preserving complete multivariate phenotype vectors and their
   # correlations. Conditional on Y, its phenotype-only pooling plan stays fixed.
   design <- pool_builder(phenotypes)
+  rng$after_pooling <- .calibration_rng_state()
   dat <- pool_from_individuals(genotypes, phenotypes, design)
   if (!is.null(dat$covariates) && ncol(as.matrix(dat$covariates)) > 0L)
     stop("Permutation calibration does not support covariate adjustment.", call. = FALSE)
@@ -169,18 +316,42 @@ calibrate_pool_permutation <- function(genotypes, phenotypes, pool_builder,
     null_data <- pool_from_individuals(permuted, phenotypes, design)
     do.call(fit_pool_ridge, c(list(data = null_data), fit_args))
   }
-  .calibration_run(observed_fit, simulate, B, "individual_permutation", list(
+  studentization <- NULL
+  rng$pilot_start <- rng$pilot_end <- NULL
+  if (maxT == "studentized") {
+    rng$pilot_start <- .calibration_rng_state()
+    studentization <- .calibration_pilot(observed_fit, simulate, B_pilot, scale_floor)
+    rng$pilot_end <- .calibration_rng_state()
+  }
+  rng$main_start <- .calibration_rng_state()
+  result <- .calibration_run(observed_fit, simulate, B, "individual_permutation", list(
     seed = seed, strata = strata,
     assumptions = c("Genotype rows exchangeable relative to fixed phenotype vectors within strata.",
                     "The pooling rule uses phenotypes only; solver settings are fixed in advance.",
                     "Exact individual dosages: no sequencing-read observation model is used."),
     limitations = c("Tests the global null of genotype-phenotype independence.",
                     "Per-variant causal nulls, strong FWER and FDR under partial alternatives are not guaranteed.",
-                    "No automatic handling of ancestry, kinship, continuous covariates or outcome-dependent tuning.")))
+                    "No automatic handling of ancestry, kinship, continuous covariates or outcome-dependent tuning.")),
+    studentization = studentization)
+  rng$main_end <- .calibration_rng_state()
+  rng$strategy <- if (maxT == "raw") "single_series" else "successive_pilot_and_main_segments"
+  result$rng <- rng
+  result$provenance <- list(
+    fingerprint_method = "MD5 of uncompressed R serialization version 2",
+    input_fingerprint = .calibration_fingerprint(list(genotypes = genotypes,
+      phenotypes = phenotypes, strata = strata)),
+    settings_fingerprint = .calibration_fingerprint(list(design = design,
+      fit = observed_fit$settings, B = B, maxT = maxT,
+      B_pilot = if (maxT == "studentized") B_pilot else NULL,
+      scale_floor = if (maxT == "studentized") scale_floor else NULL)),
+    pool_design = design,
+    pool_builder_expression = list(formals = formals(pool_builder), body = body(pool_builder)))
+  result
 }
 
 #' Experimental bootstrap under a homogeneous pool-count null
-calibrate_pool_counts <- function(data, B = 999, seed = 1, fit_args = list()) {
+calibrate_pool_counts <- function(data, B = 999, seed = 1, fit_args = list(),
+                                  rng_kind = NULL) {
   B <- .calibration_integer(B, "B")
   fit_args <- .calibration_fit_args(fit_args)
   if (!inherits(data, "pool_gwas_data") || is.null(data$counts))
@@ -191,8 +362,8 @@ calibrate_pool_counts <- function(data, B = 999, seed = 1, fit_args = list()) {
   if (length(counts$type) != 1L || !counts$type %in% c("reads", "chromosomes"))
     stop("counts$type must explicitly be 'reads' or 'chromosomes'.", call. = FALSE)
   # Recheck the full public data contract: S3 class membership alone does not
-  # establish validity after callers have edited list components. Retain the
-  # original object and metadata in the observed fit for compatibility checks.
+  # establish validity after callers have edited list components. The solver
+  # retains a validated, canonically aligned object for compatibility checks.
   validate_pool_data(data)
   if (!is.matrix(counts$alt) || !is.matrix(counts$depth) ||
       !identical(dimnames(counts$alt), dimnames(data$frequencies)) ||
@@ -215,8 +386,9 @@ calibrate_pool_counts <- function(data, B = 999, seed = 1, fit_args = list()) {
   warning("Experimental count bootstrap assumes unrelated diploid individuals, homogeneous ",
           "allele frequencies, independent variants and equal DNA contributions; ",
           "plug-in p-values have no established finite-sample calibration.", call. = FALSE)
-  restore <- .calibration_rng(seed)
+  restore <- .calibration_rng(seed, rng_kind)
   on.exit(restore(), add = TRUE)
+  rng <- attr(restore, "provenance")
   observed_fit <- do.call(fit_pool_ridge, c(list(data = data), fit_args))
   frequencies <- as.numeric(crossprod(n / sum(n), data$frequencies))
   names(frequencies) <- colnames(data$frequencies)
@@ -238,7 +410,8 @@ calibrate_pool_counts <- function(data, B = 999, seed = 1, fit_args = list()) {
       counts = list(alt = alt, depth = counts$depth, type = counts$type))
     do.call(fit_pool_ridge, c(list(data = null_data), fit_args))
   }
-  .calibration_run(observed_fit, simulate, B, "pool_count_bootstrap", list(
+  rng$main_start <- .calibration_rng_state()
+  result <- .calibration_run(observed_fit, simulate, B, "pool_count_bootstrap", list(
     seed = seed, null_frequencies = frequencies, count_type = counts$type,
     assumptions = c("One shared allele frequency per variant across every pool.",
                     "Independent unrelated diploid chromosomes and independent variants.",
@@ -247,6 +420,14 @@ calibrate_pool_counts <- function(data, B = 999, seed = 1, fit_args = list()) {
     limitations = c("Experimental parametric bootstrap with estimated null frequencies; +1 is not proof of calibration.",
                     "No LD, kinship, ancestry, unequal DNA contributions, sequencing errors or overdispersion model.",
                     "No established FDR, strong FWER or partial-null guarantees.")))
+  rng$main_end <- .calibration_rng_state()
+  rng$strategy <- "single_series"
+  result$rng <- rng
+  result$provenance <- list(
+    fingerprint_method = "MD5 of uncompressed R serialization version 2",
+    input_fingerprint = .calibration_fingerprint(data),
+    settings_fingerprint = .calibration_fingerprint(list(fit = observed_fit$settings, B = B)))
+  result
 }
 
 #' Return effects and explicitly labelled association scores
@@ -261,6 +442,7 @@ association_table <- function(fit, calibration = NULL,
   raw <- matrix(NA_real_, p, d, dimnames = dimnames(fit$beta))
   omnibus_raw <- max_t <- rep(NA_real_, p)
   resolution <- NA_real_
+  max_t_method <- NA_character_
   if (!is.null(calibration)) {
     if (!inherits(calibration, "poogwam_calibration") ||
         !identical(fit$data, calibration$fit$data) ||
@@ -282,6 +464,10 @@ association_table <- function(fit, calibration = NULL,
     status <- calibration$inference_status
     scope <- calibration$inference_scope
     resolution <- calibration$resolution
+    max_t_method <- if (is.null(calibration$maxT_method)) "raw" else calibration$maxT_method
+    if (!is.character(max_t_method) || length(max_t_method) != 1L ||
+        is.na(max_t_method) || !max_t_method %in% c("raw", "studentized"))
+      stop("Calibration maxT_method must be 'raw' or 'studentized'.", call. = FALSE)
   }
   # These are two explicitly distinct families, each adjusted once from raw p.
   adjust <- function(values) stats::p.adjust(values, method = adjustment)
@@ -304,6 +490,7 @@ association_table <- function(fit, calibration = NULL,
   result$inference_status <- status
   result$inference_scope <- scope
   result$p_resolution <- resolution
+  result$maxT_method <- ifelse(result$test == "omnibus", max_t_method, NA_character_)
   attr(result, "inference_note") <- paste(
     "Adjustment is arithmetic only: validity requires calibrated null p-values and",
     "the chosen method's dependence assumptions. Global-null calibration alone does",

@@ -2,13 +2,15 @@
 \alias{calibrate_pool_counts}
 \title{Experimental homogeneous pool-count bootstrap}
 \usage{
-calibrate_pool_counts(data, B = 999, seed = 1, fit_args = list())
+calibrate_pool_counts(data, B = 999, seed = 1, fit_args = list(),
+  rng_kind = NULL)
 }
 \arguments{
 \item{data}{A \code{pool_gwas_data} object with aligned observed \code{counts$alt}, positive \code{counts$depth}, and explicit \code{counts$type}, either \code{"reads"} or \code{"chromosomes"}. Frequencies must equal \code{alt/depth}.}
 \item{B}{Positive integer number of bootstrap replicates.}
 \item{seed}{Nonnegative integer seed; caller RNG kind and state are restored.}
 \item{fit_args}{Uniquely named list of fixed arguments for \code{fit_pool_ridge}, excluding \code{data}.}
+\item{rng_kind}{Optional three-element result of \code{RNGkind()}, for explicit replay. By default RNG algorithms are inherited from the caller. Kind and state are restored after success or error. Box-Muller normal generation and user-supplied RNGs are rejected before changing the RNG because their hidden/external state cannot be restored; see \code{calibrate_pool_permutation}.}
 }
 \description{Simulates an explicitly restricted global-null model with biological chromosome sampling and, for sequencing reads, a second observation stage. This is an experimental parametric bootstrap, not a validated general Pool-seq association test.}
 \details{
@@ -17,6 +19,8 @@ For variant j, estimate a common null frequency as the pool-size-weighted mean o
 The model assumes unrelated diploid individuals, homogeneous allele frequencies, independent chromosomes, independent variants, equal DNA contributions, and no sequencing error or extra dispersion. It does not preserve LD. Covariates and structure are unsupported and covariate-bearing inputs are rejected. The model conditions on the observed phenotype-based pool design under independence. Positive integer pool sizes and depths are required.
 
 The null allele frequencies are plug-in estimates; the pool-size-weighted estimator is not claimed to be a likelihood optimum for read data. The Monte Carlo formula \code{(1+exceedances)/(B+1)} prevents zero p-values but does not establish finite-sample validity. Model checking, LD/structure modelling and calibration on independent null data are required before confirmatory use. No FDR, strong FWER or partial-null guarantee is claimed. Maximum-statistic values share these restrictions.
+
+This bootstrap retains the raw maximum omnibus statistic. The studentized option of \code{calibrate_pool_permutation()} is not available here and would not by itself validate the plug-in bootstrap model.
 }
-\value{A \code{poogwam_calibration}, as described for \code{calibrate_pool_permutation}, with \code{inference_status="experimental_parametric_global_null"}, null frequency estimates, count type, assumptions and limitations.}
+\value{A \code{poogwam_calibration}, as described for \code{calibrate_pool_permutation}, with \code{inference_status="experimental_parametric_global_null"}, \code{maxT_method="raw"}, null frequency estimates, count type, assumptions and limitations. \code{rng} records seed, complete RNG kind, initial/main-series states and R/package versions; \code{provenance} records input/settings fingerprints. Replay requires the same inputs and settings, the saved seed and \code{rng$kind}, and compatible software.}
 \seealso{\code{\link{calibrate_pool_permutation}}, \code{\link{association_table}}}

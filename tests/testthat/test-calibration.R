@@ -170,7 +170,7 @@ test_that("count bootstrap aligns named pool sizes and validates modified object
   expect_identical(reordered$p_raw, cal$p_raw)
   expect_identical(reordered$p_omnibus, cal$p_omnibus)
   expect_identical(reordered$null_summary, cal$null_summary)
-  expect_identical(reordered$fit$data, changed)
+  expect_identical(reordered$fit$data, validate_pool_data(changed)$data)
   changed$pool_sizes <- unname(changed$pool_sizes)
   expect_error(calibrate_pool_counts(changed, B = 3), "pool_sizes.*IDs")
   changed <- data

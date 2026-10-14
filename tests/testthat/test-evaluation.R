@@ -77,3 +77,13 @@ test_that("one variant and completely tied scores keep meaningful conventions", 
   expect_equal(tied$summary$n_selected, 4)
   expect_equal(tied$summary$recall, 1)
 })
+
+test_that("AUROC pair counts do not overflow on large balanced classes", {
+  truth <- setNames(rep(c(FALSE, TRUE), each = 50000L), paste0("v", seq_len(100000L)))
+  for (direction in c(1, -1, 0)) {
+    scores <- setNames(direction * as.numeric(truth), names(truth))
+    expect_warning(result <- evaluate_associations(scores, truth, "score"), NA)
+    expect_equal(result$summary$AUROC, (direction + 1) / 2)
+    expect_true(is.finite(result$summary$average_precision))
+  }
+})

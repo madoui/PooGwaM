@@ -35,7 +35,6 @@ fit_pool_multitrait <- function(data, lambda_group = 0.1, lambda_l1 = 0,
   .fit_scalar(max_iter, "max_iter", lower = 1, integer = TRUE)
   .fit_scalar(tolerance, "tolerance", strict = TRUE)
   penalty <- match.arg(penalty)
-  prep <- .fit_prepare(data, penalty, penalty_floor, block_size, standardize_traits)
   settings <- list(lambda_group = lambda_group, lambda_l1 = lambda_l1,
                    lambda_ridge = lambda_ridge, penalty = penalty,
                    penalty_floor = penalty_floor,
@@ -53,6 +52,7 @@ fit_pool_multitrait <- function(data, lambda_group = 0.1, lambda_l1 = 0,
     class(fit) <- c("poogwam_multitrait", "poogwam_fit")
     return(fit)
   }
+  prep <- .fit_prepare(data, penalty, penalty_floor, block_size, standardize_traits)
   B <- matrix(0, ncol(prep$F), ncol(prep$Y),
               dimnames = list(colnames(prep$F), colnames(prep$Y)))
   kernel <- matrix(0, nrow(prep$F), nrow(prep$F))

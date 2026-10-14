@@ -34,3 +34,51 @@ test_that("balanced partition is deterministic, bounded and ID invariant", {
   feasible <- design_pools(twelve,k=3,method="balanced",min_size=4)
   expect_equal(as.numeric(feasible$pool_sizes),rep(4,3))
 })
+
+test_that("balanced pooling recovers a feasible tied design after a greedy dead end", {
+  Y <- matrix(rep(1:4, c(4, 2, 2, 4)), ncol = 1,
+              dimnames = list(paste0("id", 1:12), "trait"))
+  design <- design_pools(Y, k = 3, method = "balanced", min_size = 3)
+  expect_equal(as.numeric(design$pool_sizes), rep(4, 3))
+  expect_identical(design$search$method, "backtracking")
+  expect_gt(design$search$states_visited, 1)
+  expect_true(all(vapply(split(as.character(design$clusters), Y[, 1]),
+                        function(group) length(unique(group)) == 1L, TRUE)))
+  reordered <- design_pools(Y[12:1, , drop = FALSE], k = 3,
+                            method = "balanced", min_size = 3)
+  expect_identical(as.character(design$clusters),
+                   as.character(reordered$clusters[names(design$clusters)]))
+  expect_error(design_pools(Y, k = 3, method = "balanced", min_size = 3,
+                            search_budget = 1), "feasibility is unresolved")
+  expect_error(design_pools(Y, k = 3, method = "balanced", search_budget = 0),
+               "search_budget")
+  impossible <- Y
+  impossible[, 1] <- rep(1:2, each = 6)
+  expect_error(design_pools(impossible, k = 3, method = "balanced", min_size = 3),
+               "No feasible recursive")
+})
+
+test_that("small tied one-trait designs agree with independently enumerated partitions", {
+  # In one dimension, every admissible partition has cuts between contiguous
+  # tie groups. Enumerate those partitions directly, independently of the
+  # production recursive splitting procedure.
+  configurations <- expand.grid(rep(list(1:3), 4))
+  expected <- actual <- logical()
+  for (row in seq_len(nrow(configurations))) for (k in 2:4) {
+    sizes <- as.numeric(configurations[row, ])
+    boundaries <- utils::combn(1:3, k - 1L)
+    feasible <- any(apply(boundaries, 2L, function(cut) {
+      groups <- cut(seq_along(sizes), breaks = c(0, cut, 4), labels = FALSE)
+      all(as.numeric(rowsum(sizes, groups)) >= 2)
+    }))
+    Y <- matrix(rep(1:4, sizes), ncol = 1,
+                dimnames = list(paste0("id", seq_len(sum(sizes))), "trait"))
+    result <- tryCatch(design_pools(Y, k, "balanced", min_size = 2),
+                       error = function(e) e)
+    expected <- c(expected, feasible)
+    actual <- c(actual, inherits(result, "pool_design"))
+    if (inherits(result, "pool_design"))
+      expect_true(length(result$pool_sizes) == k && all(result$pool_sizes >= 2))
+  }
+  expect_identical(actual, expected)
+})

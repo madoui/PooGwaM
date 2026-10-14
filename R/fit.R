@@ -33,6 +33,9 @@
                          standardize_traits) {
   if (!inherits(data, "pool_gwas_data"))
     stop("data must inherit from pool_gwas_data", call. = FALSE)
+  # S3 lists can be edited after construction. Recheck counts, frequencies,
+  # metadata and ID alignment once, before either solver processes SNP blocks.
+  data <- validate_pool_data(data)$data
   .fit_scalar(penalty_floor, "penalty_floor", strict = TRUE)
   .fit_scalar(block_size, "block_size", lower = 1, integer = TRUE)
   if (!is.logical(standardize_traits) || length(standardize_traits) != 1L ||
@@ -108,7 +111,7 @@
   }
   D <- pmax(D_raw, penalty_floor)
   names(D) <- names(D_raw) <- names(monomorphic) <- colnames(F)
-  list(F = F, Y = Y, Ys = Ys, Yr = Yr, Z = Z, zqr = zqr, Q = Q,
+  list(data = data, F = F, Y = Y, Ys = Ys, Yr = Yr, Z = Z, zqr = zqr, Q = Q,
        weights = weights, sqrt_weights = sqrt_weights, D = D,
        D_raw = D_raw, monomorphic = monomorphic, blocks = blocks,
        trait_sd = trait_sd, working_scales = working_scales,
@@ -176,7 +179,7 @@
                  objective = objective, diagnostics = diagnostics,
                  weights = prepared$weights, penalty = prepared$D,
                  trait_scales = prepared$trait_sd, settings = settings,
-                 method = method, inference_status = "exploratory", data = data),
+                 method = method, inference_status = "exploratory", data = prepared$data),
             class = c(paste0("poogwam_", method), "poogwam_fit"))
 }
 

@@ -91,8 +91,10 @@ evaluate_associations <- function(values, truth, input_type, alpha = 0.05,
     observed <- values[, j]
     positive <- truth[, j]
     score <- if (input_type == "score" && higher_better) observed else -observed
-    npos <- sum(positive)
-    nneg <- length(positive) - npos
+    # Use double counts before pair-count products: 50,000 * 50,000 already
+    # exceeds R's integer range, although both class sizes are valid integers.
+    npos <- as.double(sum(positive))
+    nneg <- as.double(length(positive)) - npos
     # Evaluate distinct score thresholds, making both AUC and AP invariant to
     # arbitrary row ordering within ties.
     ord <- order(score, decreasing = TRUE)

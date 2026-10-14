@@ -1,19 +1,20 @@
 Package: PooGwaM
 Type: Package
 Title: Validated Multi-Response Regression for Phenotype-Defined Pools
-Version: 2.0.0
+Version: 2.1.0
 Authors@R: c(person("Bhargob", "Kakoty", role = "aut"),
     person("Mohammed-Amin", "Madoui", email = "amine.madoui@gmail.com", role = c("aut", "cre")),
     person("Christophe", "Ambroise", role = "aut"))
 Description: Fits deterministic regularized regression to allele frequencies
     and multiple phenotypes measured in pools. Provides explicit identifiers,
     quality control, phenotype pooling, joint sparse estimation and bounded
-    null-model calibration with documented assumptions. Exploratory scores
-    are separated from calibrated probabilities. External association
-    programs are managed by a separate benchmark rather than reimplemented.
+    null-model calibration with documented assumptions, including independently
+    studentized maximum statistics. Includes experimental pooled knockoff
+    selection and optional Manhattan plotting. Exploratory scores are separated
+    from calibrated probabilities and conditional selection assumptions.
 License: GPL-3
 Encoding: UTF-8
 Depends: R (>= 4.1.0)
-Imports: stats
-Suggests: testthat (>= 3.0.0)
+Imports: stats, tools, graphics
+Suggests: testthat (>= 3.2.0), qqman (>= 0.1.9), CMplot (>= 4.5.1)
 Config/testthat/edition: 3

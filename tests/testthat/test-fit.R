@@ -116,3 +116,36 @@ test_that("constant decimal traits and nuisance-explained variants stay exactly 
   expect_identical(unname(fit$beta[1, ]), c(0, 0))
   expect_equal(fit$diagnostics$constant_traits, "mass")
 })
+
+test_that("both fits reject count-frequency contradictions in modified S3 objects", {
+  dat <- small_pool_data()
+  depth <- matrix(100, nrow(dat$frequencies), ncol(dat$frequencies),
+                  dimnames = dimnames(dat$frequencies))
+  dat <- as_pool_gwas_data(phenotypes = dat$phenotypes, pool_sizes = dat$pool_sizes,
+    counts = list(alt = round(dat$frequencies * depth), depth = depth, type = "reads"))
+  dat$frequencies[1, 1] <- dat$frequencies[1, 1] + .1
+  expect_error(fit_pool_ridge(dat), "inconsistent with counts")
+  expect_error(fit_pool_multitrait(dat), "inconsistent with counts")
+  expect_error(poogwam(dat), "inconsistent with counts")
+})
+
+test_that("fits retain aligned validated data and earlier QC exclusions", {
+  dat <- small_pool_data()
+  frequencies <- dat$frequencies
+  frequencies[1, 1] <- NA_real_
+  dat <- as_pool_gwas_data(frequencies, dat$phenotypes, dat$pool_sizes,
+                           missing = "drop_variants")
+  dat$phenotypes <- dat$phenotypes[4:1, , drop = FALSE]
+  dat$pool_sizes <- dat$pool_sizes[4:1]
+  dat$variants <- dat$variants[3:1, , drop = FALSE]
+  dat$within_pool_ss <- "ancillary metadata retained"
+  expected <- validate_pool_data(dat)$data
+  for (fitter in list(fit_pool_ridge, fit_pool_multitrait)) {
+    fit <- fitter(dat)
+    expect_identical(fit$data, expected)
+    expect_identical(fit$data$qc$excluded$variant_id, "snp1")
+    expect_equal(fit$data$qc$n_input_variants, 4)
+  }
+  dat$variants$variant_id[1] <- "unknown"
+  expect_error(fit_pool_ridge(dat), "variants IDs")
+})
