@@ -1,12 +1,12 @@
-# PooGwaM 2.1.0
+# PooGwaM 2.2.0
 
-Package R pour l'analyse de fréquences alléliques et de plusieurs traits mesurés dans des pools. Il fournit une ridge, un modèle sparse-group multitraits, une calibration explicite, des knockoffs expérimentaux et des Manhattan plots. Le package contient le code, l'aide et les tests légers ; les simulations et benchmarks de recherche restent séparés.
+Package R pour l'analyse de fréquences alléliques et de plusieurs traits mesurés dans des pools. Il fournit une ridge, un modèle sparse-group multitraits, des cofacteurs fixes décrits par formule, une calibration explicite, des knockoffs expérimentaux et des Manhattan plots. Le package contient le code, l'aide et les tests légers ; les simulations et benchmarks de recherche restent séparés.
 
 ## Installation
 
 ```r
-# Depuis une archive locale de la version 2.1.0 :
-install.packages("PooGwaM_2.1.0.tar.gz", repos = NULL, type = "source")
+# Depuis une archive locale de la version 2.2.0 :
+install.packages("PooGwaM_2.2.0.tar.gz", repos = NULL, type = "source")
 
 # Pour les graphiques uniquement :
 install.packages(c("qqman", "CMplot"))
@@ -46,7 +46,7 @@ Cet exemple crée les données nécessaires dans R, sans fichier de simulation e
 
 ```r
 library(PooGwaM)
-stopifnot(packageVersion("PooGwaM") == "2.1.0")
+stopifnot(packageVersion("PooGwaM") == "2.2.0")
 
 pool_ids <- paste0("pool", 1:4)
 F <- matrix(c(.1, .3, .7, .9, .2, .4, .5, .8), 4, 2,
@@ -91,6 +91,87 @@ Les effets sont exprimés par allèle alternatif supplémentaire. Sans calibrati
 
 Ces hyperparamètres illustrent les configurations des benchmarks ; ils ne constituent pas des réglages optimaux universels. Les SNPs à coefficient non nul du modèle sparse ne sont pas automatiquement des découvertes significatives. L'API `poogwam(dat_height, method="ridge", penalty="identity")` est également utilisable ; `method="identity"` et `method="sparse"` ne sont pas des valeurs de méthode valides.
 
+## Ajuster sur le sexe, l'âge, le lot, le site et le traitement
+
+La V2.2 accepte `covariates = ~ sexe + age + lot + site + traitement` et un tableau `metadata` dont les noms de lignes sont les identifiants des individus ou des pools. Les cofacteurs et l'intercept sont des **effets fixes non pénalisés** dans les trois configurations. Ils ne sont ni des effets aléatoires, ni une correction automatique de la parenté ou de la structure génétique.
+
+L'exemple suivant utilise 96 individus fictifs répartis en 16 pools. Les proportions de sexe et les autres cofacteurs varient entre les pools. Il fournit suffisamment de pools pour les sept colonnes du modèle de cofacteurs, intercept compris, et conserve une dimension résiduelle pour l'ajustement génétique.
+
+```r
+library(PooGwaM)
+
+individual_ids <- sprintf("person%03d", 1:96)
+pool_number <- rep(1:16, each = 6)
+within_pool <- rep(1:6, 16)
+clusters <- setNames(sprintf("pool%02d", pool_number), individual_ids)
+
+metadata <- data.frame(
+  sexe = factor(ifelse(within_pool <= 1 + (pool_number - 1) %% 4, "M", "F"),
+                levels = c("F", "M")),
+  age = 25 + 1.3 * (pool_number - 1) + within_pool + 2 * (pool_number %% 3),
+  lot = factor(paste0("L", 1 + (pool_number - 1) %% 3),
+               levels = c("L1", "L2", "L3")),
+  site = factor(ifelse((pool_number - 1) %% 8 < 4, "Nord", "Sud"),
+                levels = c("Nord", "Sud")),
+  traitement = factor(ifelse((pool_number - 1) %% 2 == 0, "temoin", "traite"),
+                      levels = c("temoin", "traite")),
+  row.names = individual_ids
+)
+
+# Petits dosages et traits déterministes pour rendre l'exemple autonome.
+G <- vapply(1:4, function(j)
+  ((1:96) * (2 * j + 1) + (1:96) %/% (j + 1)) %% 3, numeric(96))
+dimnames(G) <- list(individual_ids, paste0("snp", 1:4))
+Y <- cbind(
+  height = 150 + .6 * metadata$age + 4 * (metadata$sexe == "M") +
+    1.2 * (metadata$traitement == "traite") + .8 * G[, 1] + 2 * sin((1:96) / 7),
+  mass = 45 + .4 * metadata$age + 3 * (metadata$site == "Sud") +
+    1.5 * (metadata$lot == "L3") + G[, 2] + cos((1:96) / 5)
+)
+rownames(Y) <- individual_ids
+
+dat_cofactors <- pool_from_individuals(G, Y, clusters,
+  covariates = ~ sexe + age + lot + site + traitement,
+  metadata = metadata)
+
+ridge_cofactors <- fit_pool_ridge(dat_cofactors, lambda = 1,
+                                 penalty = "within_pool")
+identity_cofactors <- fit_pool_ridge(dat_cofactors, lambda = 1,
+                                    penalty = "identity")
+sparse_cofactors <- fit_pool_multitrait(dat_cofactors,
+  lambda_ridge = 1, lambda_group = .01, lambda_l1 = .002,
+  penalty = "within_pool", standardize_traits = TRUE)
+
+ridge_cofactors$covariate_effects  # coefficients par cofacteur et par trait
+ridge_cofactors$intercept
+ridge_cofactors$diagnostics$covariate_design
+stopifnot(all(vapply(list(ridge_cofactors, identity_cofactors, sparse_cofactors),
+  function(fit) isTRUE(fit$diagnostics$converged), logical(1))))
+
+# Réencoder la metadata individuelle avec le schéma appris et les mêmes pools.
+# newdata contient des fréquences de pools, pas des dosages individuels.
+pred <- predict(ridge_cofactors, newdata = dat_cofactors$frequencies,
+                metadata = metadata, clusters = clusters)
+stopifnot(isTRUE(all.equal(pred, ridge_cofactors$fitted)))
+
+# Un objet de données conserve également les metadata nécessaires :
+predict(ridge_cofactors, newdata = dat_cofactors)
+```
+
+Le codage est réalisé **avant** l'agrégation individuelle. Avec les contrastes de traitement habituels de R, une colonne indicatrice devient la proportion d'individus de la catégorie correspondante dans chaque pool. Les références de l'exemple sont `F`, `L1`, `Nord` et `temoin` ; définir explicitement les niveaux avant l'ajustement permet de choisir ces références. Le schéma et les contrastes appris sont conservés pour la prédiction, même si une catégorie connue est absente des nouvelles observations. Un niveau inconnu est refusé.
+
+Une formule telle que `~ age + I(age^2) + sexe:traitement` est également encodée au niveau individuel avant les moyennes. Ainsi, la colonne du carré contient la **moyenne des carrés**, et non le carré de l'âge moyen ; l'interaction suit la même règle. Pour des données déjà poolées, `as_pool_gwas_data(..., covariates = ~ ..., metadata = metadata_pools)` applique au contraire la formule directement aux lignes de pools. Des moyennes seules ne permettent pas de reconstruire les transformations individuelles.
+
+Les termes directs `scale(age)` et `poly(age, 2)` conservent les paramètres appris pour la prédiction. Les transformations usuelles `I`, `log`, `log1p`, `sqrt`, `exp` et `abs` sont aussi prises en charge. Les fonctions personnalisées, les variables hors de `metadata` et les imbrications comme `I(scale(age))` ou `poly(scale(age), 2)` sont refusées ; détailler les variables plutôt qu'utiliser `~ .`, et conserver l'intercept de la formule. Les variables logiques gardent les niveaux `FALSE` et `TRUE` pour la prédiction. Un facteur déclaré avec un seul niveau est refusé explicitement.
+
+Les matrices numériques existantes restent acceptées par `covariates` : elles sont considérées comme déjà encodées, sans colonne d'intercept. En prédiction, leurs noms de colonnes doivent correspondre à l'apprentissage. Pour une formule apprise sur des individus, fournir la metadata individuelle et `clusters` ; pour une formule apprise sur des pools, fournir la metadata de ces pools. Toutes les jointures reposent sur les identifiants. Les valeurs manquantes, les individus absents et les catégories inconnues sont des erreurs explicites ; aucun individu n'est écarté silencieusement.
+
+Les objets construits avec une formule conservent la metadata et les appartenances aux pools nécessaires à la validation et à la prédiction, même avec `retain_individuals = FALSE`. Cette option contrôle la conservation des génotypes et phénotypes individuels, pas celle du schéma de cofacteurs.
+
+Le rang doit être vérifié **après pooling** : un lot confondu avec le site, une catégorie absente ou des proportions identiques dans tous les pools peuvent rendre les colonnes redondantes. Le programme refuse alors l'ajustement et indique les colonnes concernées. `diagnostics$covariate_design$residual_df` décrit `K - rang(cbind(1, C))`, avec K pools et C les cofacteurs encodés ; ce n'est pas un nombre de degrés de liberté classique pour calculer des tests t sur la ridge. Le nombre d'individus ne compense pas un nombre insuffisant de pools.
+
+**Cette première prise en charge des cofacteurs concerne les effets et les prédictions.** Les fonctions de calibration et de knockoffs n'ont pas acquis de modèle d'inférence ajusté sur ces cofacteurs. Les scores de `association_table(ridge_cofactors)` restent exploratoires, avec des p-valeurs manquantes sans calibration compatible ; les coefficients non nuls de sparse ne sont pas des découvertes significatives par eux-mêmes.
+
 ## Historique des modèles
 
 | Date / version | Évolution du code |
@@ -101,6 +182,7 @@ Ces hyperparamètres illustrent les configurations des benchmarks ; ils ne const
 | **16 octobre 2023** — [a92744c](https://github.com/madoui/PooGwaM/commit/a92744c) | Ajout de `singValRidge()`, fondé sur une SVD et une pénalité commune `mean(alpha)`. Cette pénalité moyenne n'est pas l'actuelle option explicite `identity`. |
 | **V2, livraison locale documentée le 25 septembre 2026 ; publication le 13 octobre 2026** — [89dbcef](https://github.com/madoui/PooGwaM/commit/89dbcef) | Introduction de la ridge exacte sur les pools, de l'option `identity` et du nouveau solveur sparse-group. Dosage `2F`, intercept/covariables non pénalisés et séparation entre ajustement et calibration des p-valeurs. |
 | **V2.1, 14 octobre 2026** — [0c5c23a](https://github.com/madoui/PooGwaM/commit/0c5c23a) | Formulations ridge et sparse-group conservées. Validation des entrées renforcée, maxT studentisé, knockoffs expérimentaux et Manhattan plots ajoutés. |
+| **V2.2.0, 15 octobre 2026** | Ajout de cofacteurs fixes par formule et metadata identifiées, avec encodage avant pooling et réutilisation du schéma appris pour les prédictions. Cette extension concerne l'ajustement et la prédiction ; les portées d'inférence précédentes sont conservées. |
 
 Dans la V1 archivée (0.1.51), `adaptRidge()` utilisait `X=ZF` et des poids `2*colMeans(X)*(1-colMeans(X))`, calculés à partir des fréquences moyennes. La V2 utilise `2F` et la moyenne pondérée des hétérozygoties **par pool** pour `within_pool`. Les coefficients V1/V2 ne sont donc pas directement interchangeables. La V2 a également supprimé la transformation automatique des coefficients en p-valeurs : l'ajustement fournit des effets et des scores, puis une procédure d'inférence explicite est nécessaire.
 
@@ -130,7 +212,7 @@ cal$rng$kind
 
 La studentisation estime une moyenne et une échelle omnibus propres à chaque SNP sur un pilote indépendant, puis fige cette transformation pour les permutations principales. Elle vise à réduire les différences d'échelle nulle entre SNPs. La taille du pilote ci-dessus est illustrative ; ce n'est pas un réglage validé universellement.
 
-**`maxT="raw"` reste le défaut de V2.1.** La promotion du mode studentisé attend l'étude confirmatoire de niveau et de puissance prévue au plan. Les deux modes gardent la portée **`global_null_only`** : la studentisation ne prouve ni contrôle fort de FWER sous alternatives partielles, ni FDR par variant. Les p-valeurs marginales et les maxima bruts restent disponibles. B permutations donnent une résolution minimale de `1/(B+1)`.
+**`maxT="raw"` reste le défaut de V2.2.** La promotion du mode studentisé attend l'étude confirmatoire de niveau et de puissance prévue au plan. Les deux modes gardent la portée **`global_null_only`** : la studentisation ne prouve ni contrôle fort de FWER sous alternatives partielles, ni FDR par variant. Les p-valeurs marginales et les maxima bruts restent disponibles. B permutations donnent une résolution minimale de `1/(B+1)`.
 
 Le pilote et la série principale utilisent des tirages avec remise, sans éliminer les doublons. Un pilote dégénéré produit un diagnostic, jamais une preuve que la variance nulle est nulle. L'état RNG est restauré après l'appel ; les algorithmes à état caché non restaurable (Box-Muller ou générateurs utilisateur) sont refusés. Pour rejouer dans le même environnement, réutiliser les entrées, les paramètres, la graine et `rng_kind = cal$rng$kind` ; le plan réalisé est aussi enregistré.
 

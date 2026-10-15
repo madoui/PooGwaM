@@ -41,7 +41,7 @@ as_pool_gwas_data <- function(frequencies = NULL, phenotypes, pool_sizes,
                               counts = NULL, covariates = NULL, variants = NULL,
                               missing = c("error", "drop_variants"),
                               min_maf = 0, min_depth = 0,
-                              design = list(), provenance = list()) {
+                              design = list(), provenance = list(), metadata = NULL) {
   missing <- match.arg(missing)
   .pg_scalar(min_maf, "min_maf", 0, .5)
   .pg_scalar(min_depth, "min_depth", 0)
@@ -80,10 +80,8 @@ as_pool_gwas_data <- function(frequencies = NULL, phenotypes, pool_sizes,
   n <- setNames(as.numeric(pool_sizes[pool_ids]), pool_ids)
   if (any(!is.finite(n)) || any(n <= 0 | n != floor(n)) || !is.finite(sum(n)))
     stop("pool_sizes must contain positive finite integer sizes", call. = FALSE)
-  C <- if (is.null(covariates)) NULL else
-    .pg_align(.pg_matrix(covariates, "covariates"), pool_ids, what = "covariates")
-  if (!is.null(C) && "(Intercept)" %in% colnames(C))
-    stop("Do not supply an intercept column; the model includes one", call. = FALSE)
+  covariate_input <- .pg_covariates(covariates, metadata, pool_ids, "pool")
+  C <- covariate_input$matrix
   missing_variant <- colSums(is.na(F)) > 0
   low_depth <- rep(FALSE, ncol(F))
   if (!is.null(counts)) {
@@ -132,9 +130,14 @@ as_pool_gwas_data <- function(frequencies = NULL, phenotypes, pool_sizes,
              no_between_pool_variation = colnames(F)[between == 0], constant_traits = constant_traits,
              n_input_variants = length(variant_ids), n_retained_variants = ncol(F),
              missing_policy = missing, min_maf = min_maf, min_depth = min_depth)
-  structure(list(frequencies = F, phenotypes = Y, pool_sizes = n, counts = counts,
+  out <- structure(list(frequencies = F, phenotypes = Y, pool_sizes = n, counts = counts,
                  covariates = C, variants = variants, qc = qc, design = design,
                  provenance = provenance, schema_version = "2.0"), class = "pool_gwas_data")
+  if (!is.null(covariate_input$spec)) {
+    out$covariate_spec <- covariate_input$spec
+    out$covariate_metadata <- .pg_covariate_metadata(metadata, pool_ids, all.vars(covariates))
+  }
+  out
 }
 
 validate_pool_data <- function(data) {
@@ -142,6 +145,7 @@ validate_pool_data <- function(data) {
   validated <- as_pool_gwas_data(data$frequencies, data$phenotypes, data$pool_sizes,
     counts = data$counts, covariates = data$covariates, variants = data$variants,
     design = data$design, provenance = data$provenance)
+  .pg_validate_covariate_spec(data)
   # Recompute current measurements but retain the provenance of prior filtering
   # and ancillary individual-level summaries carried by a constructed object.
   for (name in setdiff(names(data), names(validated))) validated[[name]] <- data[[name]]
@@ -164,7 +168,7 @@ print.pool_gwas_data <- function(x, ...) {
 }
 
 pool_from_individuals <- function(genotypes, phenotypes, clusters, covariates = NULL,
-                                  retain_individuals = FALSE, ...) {
+                                  retain_individuals = FALSE, ..., metadata = NULL) {
   G <- .pg_matrix(genotypes, "genotypes")
   if (any(!G %in% 0:2)) stop("genotypes must be observed diploid 0/1/2 dosages", call. = FALSE)
   Y <- .pg_align(.pg_matrix(phenotypes, "phenotypes"), rownames(G), what = "phenotypes")
@@ -182,14 +186,19 @@ pool_from_individuals <- function(genotypes, phenotypes, clusters, covariates = 
   alt <- aggregate_sum(G)
   depth <- matrix(rep(2 * n, ncol(G)), nrow = length(pools), dimnames = dimnames(alt))
   means <- aggregate_sum(Y) / as.numeric(n)
-  C <- if (is.null(covariates)) NULL else
-    .pg_align(.pg_matrix(covariates, "covariates"), ids, what = "covariates")
+  covariate_input <- .pg_covariates(covariates, metadata, ids, "individual")
+  C <- covariate_input$matrix
   Cmeans <- if (is.null(C)) NULL else aggregate_sum(C) / as.numeric(n)
   if (!is.logical(retain_individuals) || length(retain_individuals) != 1L || is.na(retain_individuals))
     stop("retain_individuals must be TRUE or FALSE", call. = FALSE)
   out <- as_pool_gwas_data(alt / depth, means, n,
       counts = list(alt = alt, depth = depth, type = "chromosomes"),
       covariates = Cmeans, design = design, ...)
+  if (!is.null(covariate_input$spec)) {
+    out$covariate_spec <- covariate_input$spec
+    out$covariate_metadata <- .pg_covariate_metadata(metadata, ids, all.vars(covariates))
+    out$covariate_clusters <- setNames(groups, ids)
+  }
   out$within_pool_ss <- aggregate_sum((Y - means[groups, , drop = FALSE])^2)
   out$individual_trait_sd <- apply(Y, 2L, stats::sd)
   if (retain_individuals)

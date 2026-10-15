@@ -74,10 +74,38 @@
   rownames(Z) <- ids
   Zw <- Z * sqrt_weights
   zqr <- qr(Zw, tol = 1e-10)
-  if (zqr$rank != ncol(Z))
-    stop("intercept and covariates must have full column rank", call. = FALSE)
-  if (ncol(Z) >= nrow(F))
-    stop("at least one residual pool degree of freedom is required", call. = FALSE)
+  constants <- if (is.null(C)) character() else colnames(C)[
+    vapply(seq_len(ncol(C)), function(j) all(C[, j] == C[1L, j]), FALSE)]
+  aliases <- if (zqr$rank == ncol(Z)) character() else
+    colnames(Z)[zqr$pivot[seq.int(zqr$rank + 1L, ncol(Z))]]
+  spec <- data$covariate_spec
+  covariate_design <- list(
+    columns = if (is.null(C)) character() else colnames(C),
+    rank = zqr$rank, n_pools = nrow(F), n_columns = ncol(Z),
+    residual_df = nrow(F) - zqr$rank, constant_columns = constants,
+    aliased_columns = aliases, rank_tolerance = 1e-10,
+    input_level = if (is.null(spec)) "encoded_pool_matrix" else spec$input_level,
+    factor_levels = if (is.null(spec)) NULL else spec$xlevels,
+    contrasts = if (is.null(spec)) NULL else spec$contrasts)
+  if (zqr$rank != ncol(Z)) {
+    message <- paste0("intercept and covariates must have full column rank after pooling; ",
+      "aliased columns: ", paste(aliases, collapse = ", "),
+      if (length(constants)) paste0("; constant columns: ", paste(constants, collapse = ", ")) else "",
+      "; ", nrow(F), " pools, ", ncol(Z), " columns including intercept, rank ", zqr$rank,
+      ". No covariate was dropped.")
+    stop(structure(list(message = message, call = NULL,
+      covariate_diagnostics = covariate_design),
+      class = c("poogwam_covariate_rank_error", "error", "condition")))
+  }
+  if (ncol(Z) >= nrow(F)) {
+    message <- paste0("at least one residual pool degree of freedom is required; ",
+      nrow(F), " pools and ", ncol(Z), " columns including intercept leave ",
+      nrow(F) - ncol(Z), " residual degrees of freedom. Covariates: ",
+      if (is.null(C)) "none" else paste(colnames(C), collapse = ", "), ".")
+    stop(structure(list(message = message, call = NULL,
+      covariate_diagnostics = covariate_design),
+      class = c("poogwam_covariate_rank_error", "error", "condition")))
+  }
   Q <- qr.Q(zqr)
   y_mean <- colSums(Y * weights)
   y_centered <- sweep(Y, 2L, y_mean, "-")
@@ -115,7 +143,7 @@
        weights = weights, sqrt_weights = sqrt_weights, D = D,
        D_raw = D_raw, monomorphic = monomorphic, blocks = blocks,
        trait_sd = trait_sd, working_scales = working_scales,
-       constant_traits = constant_traits)
+       constant_traits = constant_traits, covariate_design = covariate_design)
 }
 
 .fit_xblock <- function(prepared, j) {
@@ -163,6 +191,7 @@
   residuals <- prepared$Y - fitted
   diagnostics$covariate_rank <- prepared$zqr$rank
   diagnostics$residual_pool_df <- nrow(prepared$F) - prepared$zqr$rank
+  diagnostics$covariate_design <- prepared$covariate_design
   diagnostics$no_between_pool_variation <- names(prepared$monomorphic)[prepared$monomorphic]
   diagnostics$monomorphic_variants <- names(prepared$monomorphic)[
     prepared$monomorphic & prepared$F[1L, ] %in% c(0, 1)]
@@ -176,6 +205,7 @@
                  beta_working = B, fitted = fitted, residuals = residuals,
                  intercept = setNames(as.numeric(coefficients[1L, ]), colnames(beta)),
                  covariate_effects = coefficients[-1L, , drop = FALSE],
+                 covariate_spec = prepared$data$covariate_spec,
                  objective = objective, diagnostics = diagnostics,
                  weights = prepared$weights, penalty = prepared$D,
                  trait_scales = prepared$trait_sd, settings = settings,
@@ -238,17 +268,35 @@ print.poogwam_fit <- function(x, ...) {
 }
 
 #' @export
-predict.poogwam_fit <- function(object, newdata = NULL, covariates = NULL, ...) {
+predict.poogwam_fit <- function(object, newdata = NULL, covariates = NULL, ...,
+                                metadata = NULL, clusters = NULL) {
   if (length(list(...))) stop("unused prediction arguments", call. = FALSE)
   if (is.null(newdata)) {
     if (!is.null(covariates))
       stop("covariates require newdata", call. = FALSE)
+    if (!is.null(metadata) || !is.null(clusters))
+      stop("metadata and clusters require newdata", call. = FALSE)
     return(object$fitted)
   }
+  spec <- object$covariate_spec
+  supplied_covariates <- !is.null(covariates)
+  pool_sizes <- NULL
   if (inherits(newdata, "pool_gwas_data")) {
-    if (!is.null(covariates))
+    if (supplied_covariates)
       stop("pass covariates in newdata or separately, not both", call. = FALSE)
-    covariates <- newdata$covariates
+    if (!is.null(spec)) {
+      # Encoded column names alone cannot prove that a new population used
+      # the training transformations, contrasts or even the same formula.
+      # Reconstruct its design from raw metadata using the fitted contract.
+      if (is.null(metadata)) metadata <- newdata$covariate_metadata
+      if (is.null(clusters)) clusters <- newdata$covariate_clusters
+      pool_sizes <- newdata$pool_sizes
+    } else {
+      if (!is.null(newdata$covariate_spec))
+        stop("This model was fitted without a covariate formula; supply explicitly encoded ",
+             "covariates with a frequency matrix instead of a formula-based data object.", call. = FALSE)
+      covariates <- newdata$covariates
+    }
     F <- newdata$frequencies
   } else F <- newdata
   .fit_matrix(F, "newdata frequencies")
@@ -256,6 +304,17 @@ predict.poogwam_fit <- function(object, newdata = NULL, covariates = NULL, ...) 
     stop("newdata must have matching variant IDs and frequencies in [0, 1]", call. = FALSE)
   F <- F[, rownames(object$beta), drop = FALSE]
   required <- rownames(object$covariate_effects)
+  if (!is.null(metadata) || !is.null(clusters)) {
+    if (is.null(spec))
+      stop("metadata and clusters require a model fitted with a covariate formula", call. = FALSE)
+    if (supplied_covariates)
+      stop("provide prediction metadata or explicitly encoded covariates, not both", call. = FALSE)
+  }
+  if (!is.null(spec) && !supplied_covariates &&
+      (length(required) || !is.null(metadata) || !is.null(clusters))) {
+    covariates <- .pg_predict_covariates(spec, metadata, rownames(F),
+      clusters = clusters, pool_sizes = pool_sizes)
+  }
   Z <- matrix(1, nrow(F), 1L)
   if (length(required)) {
     .fit_matrix(covariates, "prediction covariates")

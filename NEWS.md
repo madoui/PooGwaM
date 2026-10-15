@@ -1,3 +1,32 @@
+# PooGwaM 2.2.0
+
+## Fixed cofactors from formulas and identified metadata
+
+- Accept a one-sided formula in `covariates`, with a separate `metadata` data
+  frame identified by pool or individual row names. Existing numeric covariate
+  matrices remain supported without a formula.
+- Encode categorical variables, interactions and supported transformations
+  before aggregating individual covariates into pools. Pool-level metadata are
+  encoded directly. These are unpenalized fixed effects; genetic ridge and
+  sparse-group penalties retain their existing definitions.
+- Store the training formula, encoding, factor levels and contrasts, and reuse
+  them for prediction from `metadata` and, when applicable, `clusters`. New
+  formula-prediction arguments are named; previously encoded numeric prediction
+  matrices remain usable.
+- Preserve learned parameters for direct `scale()` and `poly()` terms. Support
+  arithmetic, `I`, `log`, `log1p`, `sqrt`, `exp` and `abs`; reject unsupported
+  functions and nested stateful transforms such as `I(scale(age))` or
+  `poly(scale(age), 2)`. Logical variables retain both `FALSE`/`TRUE` levels;
+  factors declared with fewer than two levels are rejected explicitly.
+- Report covariate design columns, rank, number of pools and residual pool
+  dimension in `diagnostics$covariate_design`. Reject missing metadata, unknown
+  factor levels, unidentified rows and rank-deficient pooled covariate designs
+  explicitly instead of silently dropping terms or individuals.
+- This release adds cofactor adjustment for effect estimation and prediction.
+  Permutation calibration, count bootstrap and pooled knockoff selection do not
+  gain covariate-adjusted inference. Fitted effects and sparse selections remain
+  exploratory unless a separately justified inferential procedure is used.
+
 # PooGwaM 2.1.0
 
 ## Calibration
