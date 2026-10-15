@@ -14,7 +14,35 @@ install.packages(c("qqman", "CMplot"))
 
 R >= 4.1.0 est requis. Le noyau utilise les packages standards `stats`, `tools` et `graphics` ; `qqman` et `CMplot` sont optionnels. Le dépôt GitHub du package est [madoui/PooGwaM](https://github.com/madoui/PooGwaM). La V1 et la V2 portent le même nom : utiliser des bibliothèques distinctes pour conserver plusieurs versions.
 
-## Ajuster les modèles
+## Comparer ridge, identity et sparse
+
+`ridge` et `multitrait` sont les deux méthodes de l'API `poogwam()`. **`identity` est une option de pénalité**, disponible pour les deux solveurs ; le libellé de benchmark « sparse » désigne un réglage de `fit_pool_multitrait()`. Les trois configurations comparées dans les benchmarks sont :
+
+| Libellé | Appel et réglages | Comportement |
+|---|---|---|
+| **PooGwaM ridge** | `fit_pool_ridge()`, `lambda=1`, `penalty="within_pool"` | Réduit les coefficients avec une pénalité quadratique propre à chaque SNP, sans imposer de sélection sparse. |
+| **PooGwaM identity** | `fit_pool_ridge()`, `lambda=1`, `penalty="identity"` | Même solveur ridge, avec un poids de pénalité quadratique identique pour tous les SNPs. |
+| **PooGwaM sparse** | `fit_pool_multitrait()`, `lambda_ridge=1`, `lambda_group=0.01`, `lambda_l1=0.002`, `penalty="within_pool"` | Ajoute des pénalités pouvant annuler exactement des coefficients. Ce libellé de benchmark utilise un seul trait à la fois. |
+
+Avec les fréquences alléliques $F_{kj}$, les poids de pools $w_k=n_k/\sum_k n_k$ et le dosage $X=2F$, la ridge minimise la somme pondérée des carrés des résidus plus $\lambda\sum_{j,t}D_j B_{jt}^2$. L'intercept et les covariables éventuelles ne sont pas pénalisés. Le poids brut est :
+
+$$
+D_j^{\mathrm{brut}} =
+\begin{cases}
+\sum_k w_k\,2F_{kj}(1-F_{kj}) & \text{pour within\_pool},\\
+1 & \text{pour identity}.
+\end{cases}
+$$
+
+Le code applique ensuite `D_j = max(D_j_brut, penalty_floor)`, avec `penalty_floor=1e-8` par défaut. `within_pool` donne généralement un poids plus faible aux variants rares. Cela peut contribuer aux différences d'échelle des coefficients et des scores nuls entre fréquences alléliques. `identity` supprime cette pondération particulière ; il ne garantit pas à lui seul une puissance équilibrée. Les deux options utilisent le même solveur déterministe sur une matrice pools × pools. Voir la [préparation de la pénalité et le solveur ridge](R/fit.R).
+
+Le modèle sparse minimise la moitié du critère quadratique, avec `lambda_ridge`, plus `lambda_group` fois la somme des normes des vecteurs d'effets par variant et `lambda_l1` fois la somme des valeurs absolues des coefficients. Avec plusieurs traits, la pénalité de groupe peut retirer un variant pour tous les traits ; la pénalité L1 permet aussi des zéros spécifiques à un trait. **Avec un seul trait, les deux pénalités sparse s'additionnent : les réglages ci-dessus donnent une pénalité L1 de 0,012**, sans partage d'information entre traits.
+
+Le solveur sparse utilise un gradient proximal accéléré, une recherche de pas et un contrôle de convergence KKT. Avec `lambda_group=0` et `lambda_l1=0`, il appelle directement la ridge exacte avec les autres réglages identiques. Les traits sont standardisés par défaut pour sparse (`standardize_traits=TRUE`), contre `FALSE` pour ridge ; les effets retournés sont toujours reconvertis en unités originales. Voir le [solveur sparse-group](R/multitrait.R).
+
+## Exemples : ridge, identity et sparse
+
+Cet exemple crée les données nécessaires dans R, sans fichier de simulation externe. Les trois premiers ajustements utilisent le même trait ; le dernier illustre séparément le partage entre traits.
 
 ```r
 library(PooGwaM)
@@ -29,13 +57,52 @@ sizes <- setNames(c(20, 25, 20, 30), pool_ids)
 variants <- data.frame(variant_id = colnames(F),
                        chromosome = c("1", "2"), position = c(100, 200))
 dat <- as_pool_gwas_data(F, Y, sizes, variants = variants)
-ridge <- poogwam(dat, method = "ridge", lambda = 1)
+dat_height <- as_pool_gwas_data(F, Y[, "height", drop = FALSE], sizes,
+                                variants = variants)
+
+# Ridge avec pénalité dépendant des fréquences intra-pool :
+ridge <- fit_pool_ridge(dat_height, lambda = 1, penalty = "within_pool",
+                        standardize_traits = FALSE)
+
+# Même ridge avec pénalité uniforme entre SNPs :
+ridge_identity <- fit_pool_ridge(dat_height, lambda = 1, penalty = "identity",
+                                 standardize_traits = FALSE)
+
+# Sparse sur un seul trait : pénalité L1 totale de 0.01 + 0.002.
+sparse <- fit_pool_multitrait(dat_height, lambda_ridge = 1,
+  lambda_group = .01, lambda_l1 = .002, penalty = "within_pool",
+  standardize_traits = TRUE)
+
+# Sparse-group conjoint sur height et mass :
 joint <- poogwam(dat, method = "multitrait",
-                 lambda_ridge = 1, lambda_group = .01, lambda_l1 = .002)
+  lambda_ridge = 1, lambda_group = .01, lambda_l1 = .002,
+  penalty = "within_pool", standardize_traits = TRUE)
+
+stopifnot(all(vapply(list(ridge, ridge_identity, sparse, joint),
+  function(fit) isTRUE(fit$diagnostics$converged), logical(1))))
+cbind(ridge = ridge$beta[, "height"],
+      identity = ridge_identity$beta[, "height"],
+      sparse = sparse$beta[, "height"])
+sparse$diagnostics$selected_variants
 head(association_table(ridge))
 ```
 
 Les effets sont exprimés par allèle alternatif supplémentaire. Sans calibration, les résultats sont des scores exploratoires et les p-valeurs sont manquantes. Les données sont alignées par identifiants ; les fréquences et les comptes éventuels doivent être cohérents. Les ajustements revalident les objets, même s'ils ont été modifiés après construction.
+
+Ces hyperparamètres illustrent les configurations des benchmarks ; ils ne constituent pas des réglages optimaux universels. Les SNPs à coefficient non nul du modèle sparse ne sont pas automatiquement des découvertes significatives. L'API `poogwam(dat_height, method="ridge", penalty="identity")` est également utilisable ; `method="identity"` et `method="sparse"` ne sont pas des valeurs de méthode valides.
+
+## Historique des modèles
+
+| Date / version | Évolution du code |
+|---|---|
+| **24 novembre 2022** — [ba8e7db](https://github.com/madoui/PooGwaM/commit/ba8e7db) | L'ancien `R/selection.R` utilisait LASSO et la sélection de stabilité (`glmnet`, `stabs`), séparément pour deux traits. Cette procédure est distincte du sparse-group actuel. |
+| **7 septembre 2023** — [06a68ae](https://github.com/madoui/PooGwaM/commit/06a68ae) | Introduction d'`adaptRidge()` avec mises à jour par gradient stochastique et pénalité dépendant des fréquences ; suppression de l'ancien module de sélection. |
+| **14 septembre 2023** — [43f69a9](https://github.com/madoui/PooGwaM/commit/43f69a9) | Introduction du wrapper `poogwam()`, qui appelait `adaptRidge()` puis transformait les coefficients en p-valeurs. |
+| **16 octobre 2023** — [a92744c](https://github.com/madoui/PooGwaM/commit/a92744c) | Ajout de `singValRidge()`, fondé sur une SVD et une pénalité commune `mean(alpha)`. Cette pénalité moyenne n'est pas l'actuelle option explicite `identity`. |
+| **V2, livraison locale documentée le 25 septembre 2026 ; publication le 13 octobre 2026** — [89dbcef](https://github.com/madoui/PooGwaM/commit/89dbcef) | Introduction de la ridge exacte sur les pools, de l'option `identity` et du nouveau solveur sparse-group. Dosage `2F`, intercept/covariables non pénalisés et séparation entre ajustement et calibration des p-valeurs. |
+| **V2.1, 14 octobre 2026** — [0c5c23a](https://github.com/madoui/PooGwaM/commit/0c5c23a) | Formulations ridge et sparse-group conservées. Validation des entrées renforcée, maxT studentisé, knockoffs expérimentaux et Manhattan plots ajoutés. |
+
+Dans la V1 archivée (0.1.51), `adaptRidge()` utilisait `X=ZF` et des poids `2*colMeans(X)*(1-colMeans(X))`, calculés à partir des fréquences moyennes. La V2 utilise `2F` et la moyenne pondérée des hétérozygoties **par pool** pour `within_pool`. Les coefficients V1/V2 ne sont donc pas directement interchangeables. La V2 a également supprimé la transformation automatique des coefficients en p-valeurs : l'ajustement fournit des effets et des scores, puis une procédure d'inférence explicite est nécessaire.
 
 ## maxT brut ou studentisé
 
