@@ -1,48 +1,50 @@
 # PooGwaM 2.2.0
 
-Package R pour l'analyse de fréquences alléliques et de plusieurs traits mesurés dans des pools. Il fournit une ridge, un modèle sparse-group multitraits, des cofacteurs fixes décrits par formule, une calibration explicite, des knockoffs expérimentaux et des Manhattan plots. Le package contient le code, l'aide et les tests légers ; les simulations et benchmarks de recherche restent séparés.
+An R package for analyzing allele frequencies and multiple traits measured in pools. It provides ridge regression, a multitrait sparse-group model, formula-based fixed covariates, explicit calibration, experimental knockoffs, and Manhattan plots. The package includes code, documentation, and lightweight tests; research simulations and benchmarks are kept separately.
 
 ## Installation
 
 ```r
-# Depuis une archive locale de la version 2.2.0 :
+# From a local archive of version 2.2.0:
 install.packages("PooGwaM_2.2.0.tar.gz", repos = NULL, type = "source")
 
-# Pour les graphiques uniquement :
+# For plotting only:
 install.packages(c("qqman", "CMplot"))
 ```
 
-R >= 4.1.0 est requis. Le noyau utilise les packages standards `stats`, `tools` et `graphics` ; `qqman` et `CMplot` sont optionnels. Le dépôt GitHub du package est [madoui/PooGwaM](https://github.com/madoui/PooGwaM). La V1 et la V2 portent le même nom : utiliser des bibliothèques distinctes pour conserver plusieurs versions.
+R >= 4.1.0 is required. The core uses the standard `stats`, `tools`, and `graphics` packages; `qqman` and `CMplot` are optional. The package's GitHub repository is [madoui/PooGwaM](https://github.com/madoui/PooGwaM). V1 and V2 have the same package name: use separate libraries to retain multiple versions.
 
-## Comparer ridge, identity et sparse
+<a id="comparer-ridge-identity-et-sparse"></a>
 
-`ridge` et `multitrait` sont les deux méthodes de l'API `poogwam()`. **`identity` est une option de pénalité**, disponible pour les deux solveurs ; le libellé de benchmark « sparse » désigne un réglage de `fit_pool_multitrait()`. Les trois configurations comparées dans les benchmarks sont :
+## Comparing ridge, identity, and sparse
 
-| Libellé | Appel et réglages | Comportement |
+`ridge` and `multitrait` are the two methods in the `poogwam()` API. **`identity` is a penalty option**, available for both solvers; the benchmark label "sparse" denotes a configuration of `fit_pool_multitrait()`. The three configurations compared in the benchmarks are:
+
+| Label | Function and settings | Behavior |
 |---|---|---|
-| **PooGwaM ridge** | `fit_pool_ridge()`, `lambda=1`, `penalty="within_pool"` | Réduit les coefficients avec une pénalité quadratique propre à chaque SNP, sans imposer de sélection sparse. |
-| **PooGwaM identity** | `fit_pool_ridge()`, `lambda=1`, `penalty="identity"` | Même solveur ridge, avec un poids de pénalité quadratique identique pour tous les SNPs. |
-| **PooGwaM sparse** | `fit_pool_multitrait()`, `lambda_ridge=1`, `lambda_group=0.01`, `lambda_l1=0.002`, `penalty="within_pool"` | Ajoute des pénalités pouvant annuler exactement des coefficients. Ce libellé de benchmark utilise un seul trait à la fois. |
+| **PooGwaM ridge** | `fit_pool_ridge()`, `lambda=1`, `penalty="within_pool"` | Shrinks coefficients with a SNP-specific quadratic penalty, without imposing sparse selection. |
+| **PooGwaM identity** | `fit_pool_ridge()`, `lambda=1`, `penalty="identity"` | Uses the same ridge solver, with the same quadratic penalty weight for every SNP. |
+| **PooGwaM sparse** | `fit_pool_multitrait()`, `lambda_ridge=1`, `lambda_group=0.01`, `lambda_l1=0.002`, `penalty="within_pool"` | Adds penalties that can set coefficients exactly to zero. This benchmark label uses one trait at a time. |
 
-Avec les fréquences alléliques $F_{kj}$, les poids de pools $w_k=n_k/\sum_k n_k$ et le dosage $X=2F$, la ridge minimise la somme pondérée des carrés des résidus plus $\lambda\sum_{j,t}D_j B_{jt}^2$. L'intercept et les covariables éventuelles ne sont pas pénalisés. Le poids brut est :
+Given allele frequencies $F_{kj}$, pool weights $w_k=n_k/\sum_k n_k$, and dosage $X=2F$, ridge regression minimizes the weighted residual sum of squares plus $\lambda\sum_{j,t}D_j B_{jt}^2$. The intercept and any covariates are unpenalized. The raw weight is:
 
 $$
-D_j^{\mathrm{brut}} =
+D_j^{\mathrm{raw}} =
 \begin{cases}
-\sum_k w_k\,2F_{kj}(1-F_{kj}) & \text{pour within\_pool},\\
-1 & \text{pour identity}.
+\sum_k w_k\,2F_{kj}(1-F_{kj}) & \text{for the within-pool penalty}\\
+1 & \text{for the identity penalty}
 \end{cases}
 $$
 
-Le code applique ensuite `D_j = max(D_j_brut, penalty_floor)`, avec `penalty_floor=1e-8` par défaut. `within_pool` donne généralement un poids plus faible aux variants rares. Cela peut contribuer aux différences d'échelle des coefficients et des scores nuls entre fréquences alléliques. `identity` supprime cette pondération particulière ; il ne garantit pas à lui seul une puissance équilibrée. Les deux options utilisent le même solveur déterministe sur une matrice pools × pools. Voir la [préparation de la pénalité et le solveur ridge](R/fit.R).
+The code then applies `D_j = max(D_j_raw, penalty_floor)`, with `penalty_floor=1e-8` by default. `within_pool` generally gives rare variants a smaller weight. This can contribute to differences in coefficient and null-score scales across allele frequencies. `identity` removes this particular weighting; it does not by itself guarantee balanced power. Both options use the same deterministic solver on a pools × pools matrix. See the [penalty preparation and ridge solver](R/fit.R).
 
-Le modèle sparse minimise la moitié du critère quadratique, avec `lambda_ridge`, plus `lambda_group` fois la somme des normes des vecteurs d'effets par variant et `lambda_l1` fois la somme des valeurs absolues des coefficients. Avec plusieurs traits, la pénalité de groupe peut retirer un variant pour tous les traits ; la pénalité L1 permet aussi des zéros spécifiques à un trait. **Avec un seul trait, les deux pénalités sparse s'additionnent : les réglages ci-dessus donnent une pénalité L1 de 0,012**, sans partage d'information entre traits.
+The sparse model minimizes half the quadratic criterion, with `lambda_ridge`, plus `lambda_group` times the sum of the norms of the effect vectors for each variant and `lambda_l1` times the sum of the absolute coefficient values. With multiple traits, the group penalty can remove a variant across all traits; the L1 penalty also allows trait-specific zeros. **With a single trait, the two sparse penalties add together: the settings above give an L1 penalty of 0.012**, without sharing information across traits.
 
-Le solveur sparse utilise un gradient proximal accéléré, une recherche de pas et un contrôle de convergence KKT. Avec `lambda_group=0` et `lambda_l1=0`, il appelle directement la ridge exacte avec les autres réglages identiques. Les traits sont standardisés par défaut pour sparse (`standardize_traits=TRUE`), contre `FALSE` pour ridge ; les effets retournés sont toujours reconvertis en unités originales. Voir le [solveur sparse-group](R/multitrait.R).
+The sparse solver uses accelerated proximal gradient descent, a line search, and a KKT convergence check. With `lambda_group=0` and `lambda_l1=0`, it calls the exact ridge solver directly with the same remaining settings. Traits are standardized by default for sparse (`standardize_traits=TRUE`), versus `FALSE` for ridge; returned effects are always converted back to their original units. See the [sparse-group solver](R/multitrait.R).
 
-## Exemples : ridge, identity et sparse
+## Examples: ridge, identity, and sparse
 
-Cet exemple crée les données nécessaires dans R, sans fichier de simulation externe. Les trois premiers ajustements utilisent le même trait ; le dernier illustre séparément le partage entre traits.
+This example creates the required data in R without an external simulation file. The first three fits use the same trait; the final fit separately illustrates information sharing across traits.
 
 ```r
 library(PooGwaM)
@@ -60,20 +62,20 @@ dat <- as_pool_gwas_data(F, Y, sizes, variants = variants)
 dat_height <- as_pool_gwas_data(F, Y[, "height", drop = FALSE], sizes,
                                 variants = variants)
 
-# Ridge avec pénalité dépendant des fréquences intra-pool :
+# Ridge with a penalty based on within-pool frequencies:
 ridge <- fit_pool_ridge(dat_height, lambda = 1, penalty = "within_pool",
                         standardize_traits = FALSE)
 
-# Même ridge avec pénalité uniforme entre SNPs :
+# The same ridge solver with a uniform penalty across SNPs:
 ridge_identity <- fit_pool_ridge(dat_height, lambda = 1, penalty = "identity",
                                  standardize_traits = FALSE)
 
-# Sparse sur un seul trait : pénalité L1 totale de 0.01 + 0.002.
+# Sparse with a single trait: total L1 penalty of 0.01 + 0.002.
 sparse <- fit_pool_multitrait(dat_height, lambda_ridge = 1,
   lambda_group = .01, lambda_l1 = .002, penalty = "within_pool",
   standardize_traits = TRUE)
 
-# Sparse-group conjoint sur height et mass :
+# Joint sparse-group fit for height and mass:
 joint <- poogwam(dat, method = "multitrait",
   lambda_ridge = 1, lambda_group = .01, lambda_l1 = .002,
   penalty = "within_pool", standardize_traits = TRUE)
@@ -87,15 +89,15 @@ sparse$diagnostics$selected_variants
 head(association_table(ridge))
 ```
 
-Les effets sont exprimés par allèle alternatif supplémentaire. Sans calibration, les résultats sont des scores exploratoires et les p-valeurs sont manquantes. Les données sont alignées par identifiants ; les fréquences et les comptes éventuels doivent être cohérents. Les ajustements revalident les objets, même s'ils ont été modifiés après construction.
+Effects are expressed per additional alternative allele. Without calibration, results are exploratory scores and p-values are missing. Data are aligned by identifiers; frequencies and any counts must be consistent. Fitting functions revalidate objects, including those modified after construction.
 
-Ces hyperparamètres illustrent les configurations des benchmarks ; ils ne constituent pas des réglages optimaux universels. Les SNPs à coefficient non nul du modèle sparse ne sont pas automatiquement des découvertes significatives. L'API `poogwam(dat_height, method="ridge", penalty="identity")` est également utilisable ; `method="identity"` et `method="sparse"` ne sont pas des valeurs de méthode valides.
+These hyperparameters illustrate the benchmark configurations; they are not universally optimal settings. SNPs with nonzero coefficients in the sparse model are not automatically significant discoveries. The API also accepts `poogwam(dat_height, method="ridge", penalty="identity")`; `method="identity"` and `method="sparse"` are not valid method values.
 
-## Ajuster sur le sexe, l'âge, le lot, le site et le traitement
+## Adjusting for sex, age, batch, site, and treatment
 
-La V2.2 accepte `covariates = ~ sexe + age + lot + site + traitement` et un tableau `metadata` dont les noms de lignes sont les identifiants des individus ou des pools. Les cofacteurs et l'intercept sont des **effets fixes non pénalisés** dans les trois configurations. Ils ne sont ni des effets aléatoires, ni une correction automatique de la parenté ou de la structure génétique.
+V2.2 accepts `covariates = ~ sex + age + batch + site + treatment` and a `metadata` data frame whose row names are individual or pool identifiers. Covariates and the intercept are **unpenalized fixed effects** in all three configurations. They are neither random effects nor an automatic correction for relatedness or genetic structure.
 
-L'exemple suivant utilise 96 individus fictifs répartis en 16 pools. Les proportions de sexe et les autres cofacteurs varient entre les pools. Il fournit suffisamment de pools pour les sept colonnes du modèle de cofacteurs, intercept compris, et conserve une dimension résiduelle pour l'ajustement génétique.
+The following example uses 96 fictitious individuals divided into 16 pools. Sex proportions and other covariates vary across pools. There are enough pools for the seven columns of the covariate design, including the intercept, leaving residual dimensions for the genetic fit.
 
 ```r
 library(PooGwaM)
@@ -106,32 +108,32 @@ within_pool <- rep(1:6, 16)
 clusters <- setNames(sprintf("pool%02d", pool_number), individual_ids)
 
 metadata <- data.frame(
-  sexe = factor(ifelse(within_pool <= 1 + (pool_number - 1) %% 4, "M", "F"),
+  sex = factor(ifelse(within_pool <= 1 + (pool_number - 1) %% 4, "M", "F"),
                 levels = c("F", "M")),
   age = 25 + 1.3 * (pool_number - 1) + within_pool + 2 * (pool_number %% 3),
-  lot = factor(paste0("L", 1 + (pool_number - 1) %% 3),
+  batch = factor(paste0("L", 1 + (pool_number - 1) %% 3),
                levels = c("L1", "L2", "L3")),
-  site = factor(ifelse((pool_number - 1) %% 8 < 4, "Nord", "Sud"),
-                levels = c("Nord", "Sud")),
-  traitement = factor(ifelse((pool_number - 1) %% 2 == 0, "temoin", "traite"),
-                      levels = c("temoin", "traite")),
+  site = factor(ifelse((pool_number - 1) %% 8 < 4, "North", "South"),
+                levels = c("North", "South")),
+  treatment = factor(ifelse((pool_number - 1) %% 2 == 0, "control", "treated"),
+                      levels = c("control", "treated")),
   row.names = individual_ids
 )
 
-# Petits dosages et traits déterministes pour rendre l'exemple autonome.
+# Small deterministic dosage and trait data keep the example self-contained.
 G <- vapply(1:4, function(j)
   ((1:96) * (2 * j + 1) + (1:96) %/% (j + 1)) %% 3, numeric(96))
 dimnames(G) <- list(individual_ids, paste0("snp", 1:4))
 Y <- cbind(
-  height = 150 + .6 * metadata$age + 4 * (metadata$sexe == "M") +
-    1.2 * (metadata$traitement == "traite") + .8 * G[, 1] + 2 * sin((1:96) / 7),
-  mass = 45 + .4 * metadata$age + 3 * (metadata$site == "Sud") +
-    1.5 * (metadata$lot == "L3") + G[, 2] + cos((1:96) / 5)
+  height = 150 + .6 * metadata$age + 4 * (metadata$sex == "M") +
+    1.2 * (metadata$treatment == "treated") + .8 * G[, 1] + 2 * sin((1:96) / 7),
+  mass = 45 + .4 * metadata$age + 3 * (metadata$site == "South") +
+    1.5 * (metadata$batch == "L3") + G[, 2] + cos((1:96) / 5)
 )
 rownames(Y) <- individual_ids
 
 dat_cofactors <- pool_from_individuals(G, Y, clusters,
-  covariates = ~ sexe + age + lot + site + traitement,
+  covariates = ~ sex + age + batch + site + treatment,
   metadata = metadata)
 
 ridge_cofactors <- fit_pool_ridge(dat_cofactors, lambda = 1,
@@ -142,53 +144,53 @@ sparse_cofactors <- fit_pool_multitrait(dat_cofactors,
   lambda_ridge = 1, lambda_group = .01, lambda_l1 = .002,
   penalty = "within_pool", standardize_traits = TRUE)
 
-ridge_cofactors$covariate_effects  # coefficients par cofacteur et par trait
+ridge_cofactors$covariate_effects  # coefficients for each covariate and trait
 ridge_cofactors$intercept
 ridge_cofactors$diagnostics$covariate_design
 stopifnot(all(vapply(list(ridge_cofactors, identity_cofactors, sparse_cofactors),
   function(fit) isTRUE(fit$diagnostics$converged), logical(1))))
 
-# Réencoder la metadata individuelle avec le schéma appris et les mêmes pools.
-# newdata contient des fréquences de pools, pas des dosages individuels.
+# Re-encode individual metadata using the learned schema and the same pools.
+# newdata contains pool frequencies, not individual dosages.
 pred <- predict(ridge_cofactors, newdata = dat_cofactors$frequencies,
                 metadata = metadata, clusters = clusters)
 stopifnot(isTRUE(all.equal(pred, ridge_cofactors$fitted)))
 
-# Un objet de données conserve également les metadata nécessaires :
+# A data object also retains the metadata needed for prediction:
 predict(ridge_cofactors, newdata = dat_cofactors)
 ```
 
-Le codage est réalisé **avant** l'agrégation individuelle. Avec les contrastes de traitement habituels de R, une colonne indicatrice devient la proportion d'individus de la catégorie correspondante dans chaque pool. Les références de l'exemple sont `F`, `L1`, `Nord` et `temoin` ; définir explicitement les niveaux avant l'ajustement permet de choisir ces références. Le schéma et les contrastes appris sont conservés pour la prédiction, même si une catégorie connue est absente des nouvelles observations. Un niveau inconnu est refusé.
+Encoding takes place **before** individuals are aggregated into pools. With R's usual treatment contrasts, an indicator column becomes the proportion of individuals in the corresponding category in each pool. The reference levels in this example are `F`, `L1`, `North`, and `control`; setting factor levels explicitly before fitting lets you choose these references. The learned schema and contrasts are retained for prediction, even if a known category is absent from the new observations. An unknown level is rejected.
 
-Une formule telle que `~ age + I(age^2) + sexe:traitement` est également encodée au niveau individuel avant les moyennes. Ainsi, la colonne du carré contient la **moyenne des carrés**, et non le carré de l'âge moyen ; l'interaction suit la même règle. Pour des données déjà poolées, `as_pool_gwas_data(..., covariates = ~ ..., metadata = metadata_pools)` applique au contraire la formule directement aux lignes de pools. Des moyennes seules ne permettent pas de reconstruire les transformations individuelles.
+A formula such as `~ age + I(age^2) + sex:treatment` is also encoded at the individual level before averaging. The squared-age column therefore contains the **mean of the squares**, rather than the square of mean age; the interaction follows the same rule. For data that are already pooled, `as_pool_gwas_data(..., covariates = ~ ..., metadata = metadata_pools)` instead applies the formula directly to pool rows. Means alone cannot recover transformations of individual values.
 
-Les termes directs `scale(age)` et `poly(age, 2)` conservent les paramètres appris pour la prédiction. Les transformations usuelles `I`, `log`, `log1p`, `sqrt`, `exp` et `abs` sont aussi prises en charge. Les fonctions personnalisées, les variables hors de `metadata` et les imbrications comme `I(scale(age))` ou `poly(scale(age), 2)` sont refusées ; détailler les variables plutôt qu'utiliser `~ .`, et conserver l'intercept de la formule. Les variables logiques gardent les niveaux `FALSE` et `TRUE` pour la prédiction. Un facteur déclaré avec un seul niveau est refusé explicitement.
+Direct `scale(age)` and `poly(age, 2)` terms retain their learned parameters for prediction. The usual transformations `I`, `log`, `log1p`, `sqrt`, `exp`, and `abs` are also supported. Custom functions, variables outside `metadata`, and nested expressions such as `I(scale(age))` or `poly(scale(age), 2)` are rejected; list variables explicitly instead of using `~ .`, and retain the formula intercept. Logical variables retain the levels `FALSE` and `TRUE` for prediction. A factor declared with only one level is explicitly rejected.
 
-Les matrices numériques existantes restent acceptées par `covariates` : elles sont considérées comme déjà encodées, sans colonne d'intercept. En prédiction, leurs noms de colonnes doivent correspondre à l'apprentissage. Pour une formule apprise sur des individus, fournir la metadata individuelle et `clusters` ; pour une formule apprise sur des pools, fournir la metadata de ces pools. Toutes les jointures reposent sur les identifiants. Les valeurs manquantes, les individus absents et les catégories inconnues sont des erreurs explicites ; aucun individu n'est écarté silencieusement.
+Existing numeric matrices remain accepted by `covariates`: they are treated as already encoded, without an intercept column. At prediction time, their column names must match those used for training. For a formula learned on individuals, supply individual metadata and `clusters`; for a formula learned on pools, supply the metadata for those pools. All joins use identifiers. Missing values, missing individuals, and unknown categories raise explicit errors; no individual is silently dropped.
 
-Les objets construits avec une formule conservent la metadata et les appartenances aux pools nécessaires à la validation et à la prédiction, même avec `retain_individuals = FALSE`. Cette option contrôle la conservation des génotypes et phénotypes individuels, pas celle du schéma de cofacteurs.
+Objects constructed with a formula retain the metadata and pool memberships required for validation and prediction, even with `retain_individuals = FALSE`. This option controls retention of individual genotypes and phenotypes, rather than the covariate schema.
 
-Le rang doit être vérifié **après pooling** : un lot confondu avec le site, une catégorie absente ou des proportions identiques dans tous les pools peuvent rendre les colonnes redondantes. Le programme refuse alors l'ajustement et indique les colonnes concernées. `diagnostics$covariate_design$residual_df` décrit `K - rang(cbind(1, C))`, avec K pools et C les cofacteurs encodés ; ce n'est pas un nombre de degrés de liberté classique pour calculer des tests t sur la ridge. Le nombre d'individus ne compense pas un nombre insuffisant de pools.
+Rank must be checked **after pooling**: a batch confounded with site, an absent category, or identical proportions across all pools can make columns redundant. The program then rejects the fit and identifies the affected columns. `diagnostics$covariate_design$residual_df` describes K minus the rank of `cbind(1, C)`, where K is the number of pools and C contains the encoded covariates; it is not a classical degrees-of-freedom count for ridge t-tests. More individuals cannot compensate for too few pools.
 
-**Cette première prise en charge des cofacteurs concerne les effets et les prédictions.** Les fonctions de calibration et de knockoffs n'ont pas acquis de modèle d'inférence ajusté sur ces cofacteurs. Les scores de `association_table(ridge_cofactors)` restent exploratoires, avec des p-valeurs manquantes sans calibration compatible ; les coefficients non nuls de sparse ne sont pas des découvertes significatives par eux-mêmes.
+**This initial covariate support covers effect estimation and prediction.** The calibration and knockoff functions have not gained an inference model adjusted for these covariates. Scores from `association_table(ridge_cofactors)` remain exploratory, with missing p-values in the absence of compatible calibration; nonzero sparse coefficients are not significant discoveries by themselves.
 
-## Historique des modèles
+## Model history
 
-| Date / version | Évolution du code |
+| Date / version | Code changes |
 |---|---|
-| **24 novembre 2022** — [ba8e7db](https://github.com/madoui/PooGwaM/commit/ba8e7db) | L'ancien `R/selection.R` utilisait LASSO et la sélection de stabilité (`glmnet`, `stabs`), séparément pour deux traits. Cette procédure est distincte du sparse-group actuel. |
-| **7 septembre 2023** — [06a68ae](https://github.com/madoui/PooGwaM/commit/06a68ae) | Introduction d'`adaptRidge()` avec mises à jour par gradient stochastique et pénalité dépendant des fréquences ; suppression de l'ancien module de sélection. |
-| **14 septembre 2023** — [43f69a9](https://github.com/madoui/PooGwaM/commit/43f69a9) | Introduction du wrapper `poogwam()`, qui appelait `adaptRidge()` puis transformait les coefficients en p-valeurs. |
-| **16 octobre 2023** — [a92744c](https://github.com/madoui/PooGwaM/commit/a92744c) | Ajout de `singValRidge()`, fondé sur une SVD et une pénalité commune `mean(alpha)`. Cette pénalité moyenne n'est pas l'actuelle option explicite `identity`. |
-| **V2, livraison locale documentée le 25 septembre 2026 ; publication le 13 octobre 2026** — [89dbcef](https://github.com/madoui/PooGwaM/commit/89dbcef) | Introduction de la ridge exacte sur les pools, de l'option `identity` et du nouveau solveur sparse-group. Dosage `2F`, intercept/covariables non pénalisés et séparation entre ajustement et calibration des p-valeurs. |
-| **V2.1, 14 octobre 2026** — [0c5c23a](https://github.com/madoui/PooGwaM/commit/0c5c23a) | Formulations ridge et sparse-group conservées. Validation des entrées renforcée, maxT studentisé, knockoffs expérimentaux et Manhattan plots ajoutés. |
-| **V2.2.0, 15 octobre 2026** | Ajout de cofacteurs fixes par formule et metadata identifiées, avec encodage avant pooling et réutilisation du schéma appris pour les prédictions. Cette extension concerne l'ajustement et la prédiction ; les portées d'inférence précédentes sont conservées. |
+| **24 November 2022** — [ba8e7db](https://github.com/madoui/PooGwaM/commit/ba8e7db) | The former `R/selection.R` used LASSO and stability selection (`glmnet`, `stabs`), separately for two traits. This procedure differs from the current sparse-group model. |
+| **7 September 2023** — [06a68ae](https://github.com/madoui/PooGwaM/commit/06a68ae) | Introduced `adaptRidge()` with stochastic gradient updates and a frequency-dependent penalty; removed the former selection module. |
+| **14 September 2023** — [43f69a9](https://github.com/madoui/PooGwaM/commit/43f69a9) | Introduced the `poogwam()` wrapper, which called `adaptRidge()` and then transformed coefficients into p-values. |
+| **16 October 2023** — [a92744c](https://github.com/madoui/PooGwaM/commit/a92744c) | Added `singValRidge()`, based on an SVD and a common penalty `mean(alpha)`. This average penalty is not the current explicit `identity` option. |
+| **V2, local delivery documented on 25 September 2026; published on 13 October 2026** — [89dbcef](https://github.com/madoui/PooGwaM/commit/89dbcef) | Introduced exact ridge regression on pools, the `identity` option, and the new sparse-group solver. Uses dosage `2F`, unpenalized intercept/covariates, and separate fitting and p-value calibration. |
+| **V2.1, 14 October 2026** — [0c5c23a](https://github.com/madoui/PooGwaM/commit/0c5c23a) | Retained the ridge and sparse-group formulations. Strengthened input validation and added studentized maxT, experimental knockoffs, and Manhattan plots. |
+| **V2.2.0, 15 October 2026** | Added formula-based fixed covariates and metadata matched by identifiers, with encoding before pooling and reuse of the learned schema for predictions. This extension covers fitting and prediction; the previous inference scopes are unchanged. |
 
-Dans la V1 archivée (0.1.51), `adaptRidge()` utilisait `X=ZF` et des poids `2*colMeans(X)*(1-colMeans(X))`, calculés à partir des fréquences moyennes. La V2 utilise `2F` et la moyenne pondérée des hétérozygoties **par pool** pour `within_pool`. Les coefficients V1/V2 ne sont donc pas directement interchangeables. La V2 a également supprimé la transformation automatique des coefficients en p-valeurs : l'ajustement fournit des effets et des scores, puis une procédure d'inférence explicite est nécessaire.
+In archived V1 (0.1.51), `adaptRidge()` used `X=ZF` and weights `2*colMeans(X)*(1-colMeans(X))`, calculated from mean frequencies. V2 uses `2F` and the weighted mean of **per-pool** heterozygosities for `within_pool`. V1/V2 coefficients are therefore not directly interchangeable. V2 also removed the automatic transformation of coefficients into p-values: fitting provides effects and scores, after which an explicit inference procedure is required.
 
-## maxT brut ou studentisé
+## Raw or studentized maxT
 
-Exemple autonome sur de petites données illustratives :
+A self-contained example using small illustrative data:
 
 ```r
 set.seed(42)
@@ -210,19 +212,19 @@ cal$studentization$floored_variants
 cal$rng$kind
 ```
 
-La studentisation estime une moyenne et une échelle omnibus propres à chaque SNP sur un pilote indépendant, puis fige cette transformation pour les permutations principales. Elle vise à réduire les différences d'échelle nulle entre SNPs. La taille du pilote ci-dessus est illustrative ; ce n'est pas un réglage validé universellement.
+Studentization estimates a SNP-specific omnibus mean and scale from an independent pilot, then freezes this transformation for the main permutations. It aims to reduce differences in null scales across SNPs. The pilot size above is illustrative, rather than a universally validated setting.
 
-**`maxT="raw"` reste le défaut de V2.2.** La promotion du mode studentisé attend l'étude confirmatoire de niveau et de puissance prévue au plan. Les deux modes gardent la portée **`global_null_only`** : la studentisation ne prouve ni contrôle fort de FWER sous alternatives partielles, ni FDR par variant. Les p-valeurs marginales et les maxima bruts restent disponibles. B permutations donnent une résolution minimale de `1/(B+1)`.
+**`maxT="raw"` remains the default in V2.2.** Making studentized maxT the default awaits the planned confirmatory study of error rates and power. Both modes retain the **`global_null_only`** scope: studentization establishes neither strong FWER control under partial alternatives nor variant-level FDR control. Marginal p-values and raw maxima remain available. B permutations give a minimum resolution of `1/(B+1)`.
 
-Le pilote et la série principale utilisent des tirages avec remise, sans éliminer les doublons. Un pilote dégénéré produit un diagnostic, jamais une preuve que la variance nulle est nulle. L'état RNG est restauré après l'appel ; les algorithmes à état caché non restaurable (Box-Muller ou générateurs utilisateur) sont refusés. Pour rejouer dans le même environnement, réutiliser les entrées, les paramètres, la graine et `rng_kind = cal$rng$kind` ; le plan réalisé est aussi enregistré.
+The pilot and main series use sampling with replacement, without removing duplicates. A degenerate pilot produces a diagnostic, never proof that the null variance is zero. The RNG state is restored after the call; algorithms with hidden state that cannot be restored (Box-Muller or user-supplied generators) are rejected. To replay in the same environment, reuse the inputs, settings, seed, and `rng_kind = cal$rng$kind`; the realized plan is also recorded.
 
-`calibrate_pool_counts()` reste un bootstrap expérimental de comptes sous fréquences homogènes, avec maxT brut. Il ne traite pas automatiquement LD, parenté, ascendance, surdispersion ou erreurs de séquençage.
+`calibrate_pool_counts()` remains an experimental count bootstrap under homogeneous frequencies, with raw maxT. It does not automatically account for LD, relatedness, ancestry, overdispersion, or sequencing errors.
 
-## Knockoffs poolés expérimentaux
+## Experimental pooled knockoffs
 
 ```r
-# f est ici connu, car il a servi à générer G ci-dessus.
-# Il ne doit pas être remplacé sans justification par la fréquence estimée sur G.
+# f is known here because it was used to generate G above.
+# Do not replace it with the frequency estimated from G without justification.
 G_tilde <- generate_independent_knockoffs(G, frequencies = f, seed = 456)
 selection <- select_pool_knockoffs(G, G_tilde, Y, builder,
   q = .1, method = "ridge", fit_args = list(lambda = 1), seed = 123)
@@ -230,49 +232,49 @@ selection$selected
 selection$W
 selection$inference_status
 
-# Le solveur multitraits est également disponible :
+# The multitrait solver is also available:
 # selection <- select_pool_knockoffs(G, G_tilde, Y, builder,
 #   method = "multitrait", fit_args = list(lambda_group = .01))
 ```
 
-Les originaux et copies sont poolés puis ajustés ensemble. Le contraste W compare les normes de coefficients standardisés ; le seuil knockoff+ utilise la correction `+1`. La découverte porte sur un variant associé au vecteur des traits, pas sur chaque couple variant-trait. Aucune p-valeur n'est attribuée à W.
+Originals and copies are pooled, then fitted together. The W contrast compares the norms of standardized coefficients; the knockoff+ threshold uses the `+1` correction. A discovery concerns a variant associated with the trait vector, rather than each variant–trait pair. No p-value is assigned to W.
 
-**Statut `experimental_knockoff`.** Le générateur fourni est une référence sous modèle binomial indépendant connu. Il ne génère pas des knockoffs adaptés à un LD arbitraire. Une paire externe peut être fournie, avec provenance et métadonnées alléliques, mais la validation des matrices ne certifie pas son échangeabilité. Le contrôle théorique exige les hypothèses Model-X et la symétrie de toute la procédure. Les HMM estimés, covariables, parenté et fréquences issues de reads demandent des extensions distinctes.
+**Status: `experimental_knockoff`.** The supplied generator is a reference implementation under a known independent binomial model. It does not generate knockoffs suitable for arbitrary LD. An external pair can be supplied, with provenance and allele metadata, but matrix validation does not certify its exchangeability. The theoretical guarantee requires the Model-X assumptions and symmetry of the entire procedure. Estimated HMMs, covariates, relatedness, and read-based frequencies require separate extensions.
 
-## Manhattan plots avec qqman ou CMplot
+## Manhattan plots with qqman or CMplot
 
 ```r
 coords <- data.frame(variant_id = snps,
   chromosome = rep(c("1", "2"), each = 20),
   position = rep(seq(1000, 20000, by = 1000), 2))
 
-# Omnibus, p-valeurs maxT ajustées, seuil explicite :
+# Omnibus adjusted maxT p-values, with an explicit threshold:
 plot_manhattan(cal, variants = coords, value = "p_maxT",
                 backend = "qqman", threshold = .05)
 
-# Une p-valeur marginale par trait :
+# Marginal p-values for one trait:
 plot_manhattan(cal, variants = coords, value = "p_raw",
                 test = "trait", trait = "height", backend = "CMplot")
 
-# W signé : pas de transformation en p-valeur.
+# Signed W: no transformation into a p-value.
 plot_manhattan(selection, variants = coords, value = "W")
 
-# Préparer les données sans aucune dépendance graphique :
+# Prepare the data without any plotting dependency:
 prepared <- manhattan_data(cal, variants = coords)
 head(prepared$data)
 
-# Export PDF ; png() est également utilisable :
+# Export to PDF; png() can also be used:
 pdf("manhattan-maxT.pdf", width = 10, height = 5)
 plot_manhattan(cal, variants = coords, threshold = .05)
 dev.off()
 ```
 
-Les coordonnées sont jointes par `variant_id`. Les noms de colonnes sont personnalisables via `chromosome` et `position`, et l'ordre via `chromosome_order`. Pour un seul chromosome, utiliser `qqman` : l'axe mono-chromosome de CMplot présente des limites sur les petits intervalles et les étiquettes. Le graphique n'ajoute aucun seuil humain conventionnel. Les p-valeurs nulles sont refusées, sans plancher silencieux. Les valeurs manquantes sont refusées par défaut ; `na_action="omit"` les exclut explicitement avec avertissement et liste des identifiants.
+Coordinates are joined by `variant_id`. Column names can be customized through `chromosome` and `position`, and chromosome order through `chromosome_order`. For a single chromosome, use `qqman`: CMplot's single-chromosome axis has limitations with small ranges and labels. The plot adds no conventional human GWAS threshold automatically. Zero p-values are rejected, without silent flooring. Missing values are rejected by default; `na_action="omit"` explicitly excludes them with a warning and a list of identifiers.
 
-## Corrections et limites
+## Fixes and limitations
 
-La V2.1 corrige le débordement entier de l'AUROC, les impasses du pooling glouton lorsqu'une autre partition récursive est faisable, et la validation d'objets modifiés avant ajustement. La recherche de pools est bornée par `search_budget` ; un budget épuisé ne signifie pas impossibilité démontrée.
+V2.1 fixes integer overflow in AUROC, greedy pooling dead ends when another recursive partition is feasible, and validation of objects modified before fitting. Pool search is bounded by `search_budget`; exhausting that budget does not prove infeasibility.
 
-La matrice pools × variants reste en mémoire. Les scores multitraits exploratoires, la calibration par permutation et les knockoffs gardent leurs portées propres. Les allèles doivent conserver leur orientation ; aucune méthode ne répare automatiquement une confusion génétique ou un modèle de reads mal spécifié.
+The pools × variants matrix remains in memory. Exploratory multitrait scores, permutation calibration, and knockoffs retain their respective scopes. Alleles must retain their orientation; no method automatically corrects genetic confounding or a misspecified read model.
 
-Voir [NEWS](NEWS.md), la [note méthodologique](inst/doc/inference-v2.1.md) et les pages d'aide R pour les détails. La suite de tests compare les solveurs à des références indépendantes et couvre les invariances, les cas limites, les p-valeurs, les échanges knockoffs et les deux moteurs graphiques. Un contrôle logiciel ne remplace pas la validation biologique ou statistique confirmatoire.
+See [NEWS](NEWS.md), the [methodological note](inst/doc/inference-v2.1.md), and the R help pages for details. The test suite compares solvers with independent references and covers invariances, edge cases, p-values, knockoff swaps, and both plotting backends. Software checks do not replace biological or confirmatory statistical validation.
