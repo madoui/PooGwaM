@@ -28,13 +28,13 @@ R >= 4.1.0 is required. The core uses the standard `stats`, `tools`, and `graphi
 
 Given allele frequencies $F_{kj}$, pool weights $w_k=n_k/\sum_k n_k$, and dosage $X=2F$, ridge regression minimizes the weighted residual sum of squares plus $\lambda\sum_{j,t}D_j B_{jt}^2$. The intercept and any covariates are unpenalized. The raw weight is:
 
-$$
+```math
 D_j^{\mathrm{raw}} =
 \begin{cases}
 \sum_k w_k\,2F_{kj}(1-F_{kj}) & \text{for the within-pool penalty}\\
 1 & \text{for the identity penalty}
 \end{cases}
-$$
+```
 
 The code then applies `D_j = max(D_j_raw, penalty_floor)`, with `penalty_floor=1e-8` by default. `within_pool` generally gives rare variants a smaller weight. This can contribute to differences in coefficient and null-score scales across allele frequencies. `identity` removes this particular weighting; it does not by itself guarantee balanced power. Both options use the same deterministic solver on a pools × pools matrix. See the [penalty preparation and ridge solver](R/fit.R).
 
